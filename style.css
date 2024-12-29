@@ -148,18 +148,7 @@ button:hover{
 
 
 
-  @media (max-width: 360px) {
-	.logo {
-	  top: 50%; /* Ajuste para uma posição mais próxima no mobile */
-	  width:200px; /* Reduza o tamanho do logo */
-	  height: 200px;
-	}
-  
-	.main {
-	  margin-top:0px; /* Adicione espaço entre o logo e o formulário */
-	  padding-top: 50px;
-	}
-  }
+
   
   @media (max-width: 430px) {
 	.logo {
@@ -174,7 +163,7 @@ button:hover{
 	}
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 414px) {
 	.logo {
 	  position: fixed; /* Alterar para relativo em mobile */
 	  top: 200; /* Remover o deslocamento */
@@ -185,8 +174,45 @@ button:hover{
   
 	.main {
 	  margin-top: 0; /* Reduz a margem superior para aproximar o formulário */
-	  padding-top: 70px; /* Espaçamento interno para ajustar a posição */
+	  padding-top: 0; /* Espaçamento interno para ajustar a posição */
+	}
+  }
+
+
+  @media (max-width: 430px) {
+	.logo {
+	  position: fixed; /* Alterar para relativo em mobile */
+	  top: -50; /* Remover o deslocamento */
+	  margin: 0 auto 20px auto; /* Centralizar o logo e adicionar espaçamento */
+	  width: 200px; /* Ajustar o tamanho para maior visibilidade */
+	  height: 200px;
+	  margin-top: 40px;
+	}
+  
+	.main {
+	  margin-top: 0; /* Reduz a margem superior para aproximar o formulário */
+	  padding-top: 50px; /* Espaçamento interno para ajustar a posição */
 	}
   }
   
+
+  @media (max-width: 375px) {
+	.logo {
+	  position: fixed; /* Alterar para relativo em mobile */
+	  top: -50; /* Remover o deslocamento */
+	  margin: 0 auto 20px auto; /* Centralizar o logo e adicionar espaçamento */
+	  width: 200px; /* Ajustar o tamanho para maior visibilidade */
+	  height: 200px;
+	  margin-top: -5px;
+	  
+	}
+  
+	.main {
+	  margin-top: 0; /* Reduz a margem superior para aproximar o formulário */
+	  padding-top: 0px; /* Espaçamento interno para ajustar a posição */
+	}
+  }
+  
+
+
   
