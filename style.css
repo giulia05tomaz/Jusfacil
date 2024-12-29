@@ -114,7 +114,7 @@ button:hover{
 
 .logo {
 	position: absolute; /* Permite posicionamento livre */
-	top: 10%; /* Move o logo para fora do contêiner principal */
+	top: 30%; /* Move o logo para fora do contêiner principal */
 	left: 50%; /* Centraliza horizontalmente */
 	transform: translateX(-50%); /* Ajusta para alinhar perfeitamente ao centro */
 	width: 120px;
@@ -131,7 +131,7 @@ button:hover{
   
   .logo img {
 	width: 80%;
-	height: 80%;
+
 	object-fit: contain; /* Garante que o logo seja exibido corretamente */
   }
   
@@ -156,7 +156,7 @@ button:hover{
 		font-family: 'Jost', sans-serif;
 	
 	}
-	
+
 
 	
   }
