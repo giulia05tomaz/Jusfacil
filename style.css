@@ -114,7 +114,7 @@ button:hover{
 
 .logo {
 	position: absolute; /* Permite posicionamento livre */
-	top: 60px; /* Move o logo para fora do contêiner principal */
+	top: 10%; /* Move o logo para fora do contêiner principal */
 	left: 50%; /* Centraliza horizontalmente */
 	transform: translateX(-50%); /* Ajusta para alinhar perfeitamente ao centro */
 	width: 120px;
