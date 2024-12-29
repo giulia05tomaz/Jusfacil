@@ -113,8 +113,8 @@ button:hover{
 }
 
 .logo {
-	position: absolute; /* Permite posicionamento livre */
-	top: 30%; /* Move o logo para fora do contêiner principal */
+	position: fixed; /* Permite posicionamento livre */
+	top: 5%; /* Move o logo para fora do contêiner principal */
 	left: 50%; /* Centraliza horizontalmente */
 	transform: translateX(-50%); /* Ajusta para alinhar perfeitamente ao centro */
 	width: 120px;
@@ -144,19 +144,4 @@ button:hover{
 	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
   }
 
-
-  @media (max-width: 375px) {
-	body{
-		margin: 0;
-		padding: 0;
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		min-height: 100vh;
-		font-family: 'Jost', sans-serif;
-	
-	}
-
-
-	
-  }
+ 
