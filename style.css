@@ -116,10 +116,10 @@ button:hover{
 	position: absolute; /* Permite posicionamento livre */
 	top: 5%; /* Move o logo para fora do contêiner principal */
 	left: 50%; /* Centraliza horizontalmente */
-	transform: translateX(-50%); /* Ajusta para alinhar perfeitamente ao centro */
-	width: 160px;
-	height: 160px;
-	border-radius: 50%; /* Faz o círculo */
+	transform: translateX(-50%); /* Alinha perfeitamente ao centro */
+	width: 192px; /* Aumentado em 20% (160px * 1.2) */
+	height: 192px;
+	border-radius: 50%; /* Mantém o círculo */
 	background-color: #fff; /* Fundo branco para destacar o logo */
 	display: flex;
 	justify-content: center;
@@ -130,8 +130,8 @@ button:hover{
   }
   
   .logo img {
-	width: 80%;
-
+	width: 85%; /* Ajusta proporcionalmente o tamanho do logo */
+	height: 85%;
 	object-fit: contain; /* Garante que o logo seja exibido corretamente */
   }
   
@@ -154,7 +154,7 @@ button:hover{
 	}
   
 	.main {
-	  margin-top: 200px; /* Adicione espaço entre o logo e o formulário */
+	  margin-top:0px; /* Adicione espaço entre o logo e o formulário */
 	}
   }
   
