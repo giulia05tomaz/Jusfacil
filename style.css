@@ -7,9 +7,6 @@ body{
 	min-height: 100vh;
 	font-family: 'Jost', sans-serif;
 	background-image: url("img/bkg.jpg");
-	background-size: cover; /* Ajusta o fundo para cobrir a tela inteira */
-	background-repeat: no-repeat; /* Evita repetição da imagem */
-	background-position: center; /* Centraliza a imagem */
 }
 .main{
 	width: 350px;
@@ -90,3 +87,59 @@ button:hover{
 #chk:checked ~ .signup label{
 	transform: scale(.6);
 }
+
+.login {
+	height: 460px;
+	background: #eee;
+	border-radius: 60% / 10%;
+	transform: translateY(-180px);
+	transition: 0.8s ease-in-out;
+	z-index: 11000; /* Certifica-se de que interações ainda funcionam */
+  }
+  
+  .login label {
+	color: #002b43;
+	transform: scale(0.6);
+  }
+
+#chk:checked ~ .login{
+	transform: translateY(-500px);
+}
+#chk:checked ~ .login label{
+	transform: scale(1);	
+}
+#chk:checked ~ .signup label{
+	transform: scale(.6);
+}
+
+.logo {
+	position: absolute; /* Permite posicionamento livre */
+	top: 60px; /* Move o logo para fora do contêiner principal */
+	left: 50%; /* Centraliza horizontalmente */
+	transform: translateX(-50%); /* Ajusta para alinhar perfeitamente ao centro */
+	width: 120px;
+	height: 120px;
+	border-radius: 50%; /* Faz o círculo */
+	background-color: #fff; /* Fundo branco para destacar o logo */
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); /* Adiciona sombra */
+	z-index: 2; /* Certifica-se de que o logo fique acima */
+	pointer-events: none; /* Garante que o logo não bloqueie interações */
+  }
+  
+  .logo img {
+	width: 80%;
+	height: 80%;
+	object-fit: contain; /* Garante que o logo seja exibido corretamente */
+  }
+  
+  .content {
+	position: relative;
+	z-index: 1; /* Garante que o conteúdo fique abaixo do logo */
+	background: #eee;
+	border-radius: 10px;
+	padding: 20px;
+	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  }
