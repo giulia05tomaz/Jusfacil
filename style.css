@@ -161,13 +161,16 @@ button:hover{
 
   @media (max-width: 768px) {
 	.logo {
-	  top: 15%; /* Reduza a distância do topo */
-	  width: 100px; /* Aumente o tamanho do logo */
-	  height: 100px;
+	  position: absolute; /* Alterar para relativo em mobile */
+	  top: 200; /* Remover o deslocamento */
+	  margin: 0 auto 20px auto; /* Centralizar o logo e adicionar espaçamento */
+	  width: 120px; /* Ajustar o tamanho para maior visibilidade */
+	  height: 120px;
 	}
   
 	.main {
-	  margin-top: 70px; /* Reduza a margem superior para aproximar o formulário do logo */
+	  margin-top: 0; /* Reduz a margem superior para aproximar o formulário */
+	  padding-top: 70px; /* Espaçamento interno para ajustar a posição */
 	}
   }
   
