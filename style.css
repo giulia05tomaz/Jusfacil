@@ -149,8 +149,8 @@ button:hover{
   @media (max-width: 375px) {
 	.logo {
 	  top: 50%; /* Ajuste para uma posição mais próxima no mobile */
-	  width:160px; /* Reduza o tamanho do logo */
-	  height: 160px;
+	  width:200px; /* Reduza o tamanho do logo */
+	  height: 200px;
 	}
   
 	.main {
@@ -164,8 +164,8 @@ button:hover{
 	  position: absolute; /* Alterar para relativo em mobile */
 	  top: 200; /* Remover o deslocamento */
 	  margin: 0 auto 20px auto; /* Centralizar o logo e adicionar espaçamento */
-	  width: 120px; /* Ajustar o tamanho para maior visibilidade */
-	  height: 120px;
+	  width: 200px; /* Ajustar o tamanho para maior visibilidade */
+	  height: 200px;
 	}
   
 	.main {
