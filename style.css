@@ -144,4 +144,15 @@ button:hover{
 	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
   }
 
- 
+  @media (max-width: 768px) {
+	.logo {
+	  top: 10%; /* Ajuste para uma posição mais próxima no mobile */
+	  width: 80px; /* Reduza o tamanho do logo */
+	  height: 80px;
+	}
+  
+	.main {
+	  margin-top: 200px; /* Adicione espaço entre o logo e o formulário */
+	}
+  }
+  
