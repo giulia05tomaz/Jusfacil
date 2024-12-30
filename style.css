@@ -179,69 +179,26 @@ button:hover{
 
 
 
- 
-  
   @media (max-width: 375px) {
 	.logo {
-	  top: -30px; /* Ajusta a posição para telas pequenas */
-	  width: 150px; /* Reduz ainda mais o tamanho do círculo */
+	  position: absolute;
+	  top: 50px; /* Move o logo mais para cima */
+	  width: 150px; /* Diminui o tamanho do círculo */
 	  height: 150px;
 	  transform: translateX(-50%);
-	  margin-top: 50px;
-	}
-
-	.logo img{
-		width: 150px; /* Reduz ainda mais o tamanho do círculo */
-		height: 150px;
-		border-radius: 100% 100%; 
 	}
   
 	.main {
-	  margin-top: 50px; /* Ajusta o espaço para manter o layout harmonioso */
+	  margin-top: 130px; /* Adiciona mais espaço abaixo do logo */
+	}
+
+	.logo img{
+	  width: 110px; /* Diminui o tamanho do círculo */
+	  height: 110px;
 	}
   }
   
 
-    
-  @media (max-width: 414px) {
-	.logo {
-	  top: -30px; /* Ajusta a posição para telas pequenas */
-	  width: 150px; /* Reduz ainda mais o tamanho do círculo */
-	  height: 150px;
-	  transform: translateX(-50%);
-	  margin-top: 100px;
-	}
 
-	.logo img{
-		width: 150px; /* Reduz ainda mais o tamanho do círculo */
-		height: 150px;
-		border-radius: 100% 100%; 
-	}
-  
-	.main {
-	  margin-top: 50px; /* Ajusta o espaço para manter o layout harmonioso */
-	}
-  }
-  
 
-      
-  @media (max-width: 430px) {
-	.logo {
-	  top: -30px; /* Ajusta a posição para telas pequenas */
-	  width: 150px; /* Reduz ainda mais o tamanho do círculo */
-	  height: 150px;
-	  transform: translateX(-50%);
-	  margin-top: 130px;
-	}
-
-	.logo img{
-		width: 150px; /* Reduz ainda mais o tamanho do círculo */
-		height: 150px;
-		border-radius: 100% 100%; 
-	}
-  
-	.main {
-	  margin-top: 50px; /* Ajusta o espaço para manter o layout harmonioso */
-	}
-  }
   
