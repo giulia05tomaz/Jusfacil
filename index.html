@@ -1,50 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard</title>
-  <link rel="stylesheet" href="styles_home.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Jost:wght@500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css"> <!-- Arquivo de CSS externo -->
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>Rewards</h1>
-    </header>
-    <main>
-      <section class="updates">
-        <h2>Atualizações de Processos</h2>
-        <ul>
-          <li><a href="#">Processo nº 0100XXX-23.2022.5.01.0069</a> <span>12/11/2024</span></li>
-          <li><a href="#">Processo nº 0100XXX-23.2022.5.01.0268</a> <span>13/03/2024</span></li>
-          <li><a href="#">Processo nº 0100XXX-23.2022.5.01.2489</a> <span>03/04/2024</span></li>
-        </ul>
-        <a href="#" class="view-more">Ver Mais</a>
-      </section>
+  <div class="logo">
+    <img src="img/Logo.png" alt="Logo">
+</div>
+  <div class="main">
+      <input type="checkbox" id="chk" aria-hidden="true">
+      
+      <div class="signup">
+          <form>
+              <label for="chk" aria-hidden="true">Cadastrar</label>
+              <input type="text" name="nome" placeholder="Nome completo" required>
+              <input type="email" name="email" placeholder="Email" required>
+              <input type="password" name="senha" placeholder="Senha" required>
+              <button>Cadastrar</button>
+          </form>
+      </div>
 
-      <section class="completed">
-        <h2>Processos Concluídos</h2>
-        <ul>
-          <li><a href="#">Processo nº 0100XXX-23.2022.5.02.0218</a></li>
-          <li><a href="#">Processo nº 0100XXX-23.2022.5.02.8926</a></li>
-          <li><a href="#">Processo nº 0100XXX-23.2022.5.02.8794</a></li>
-        </ul>
-      </section>
-
-      <section class="new-process">
-        <h2>Abrir novo processo</h2>
-        <button>Abrir agora</button>
-      </section>
-
-      <section class="support-app">
-        <h2>Ajude nosso aplicativo</h2>
-        <button>Apoiar agora</button>
-      </section>
-    </main>
-
-    <footer>
-      <nav>
-        <ul>
-          <li><a href="#" class="active">Home</a></li>
-          <li><a href="#">Dashboard</a></li>
-          <li><a href="#">Chat Bot<
+      <div class="login">
+          <form>
+              <label for="chk" aria-hidden="true">Login</label>
+              <input type="email" name="email" placeholder="Email" required>
+              <input type="password" name="senha" placeholder="Senha" required>
+              <button>Login</button>
+          </form>
+      </div>
+  </div>
+</html>
