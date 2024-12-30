@@ -48,13 +48,13 @@ body {
   
   a {
     text-decoration: none;
-    color: #007BFF;
+    color: #ffffff;
   }
   
   button {
     width: 100%;
     padding: 10px;
-    background: #007BFF;
+    background: #ffffff;
     color: white;
     border: none;
     border-radius: 5px;
@@ -78,12 +78,16 @@ body {
   footer nav ul li a {
     text-decoration: none;
     color: #333;
-    font-size: 14px;
+    font-size: 12px;
   }
   
   footer nav ul li a.active {
     font-weight: bold;
-    color: #007BFF;
+    color: #ffffff;
+  }
+
+  .new-process{
+    background-color: #DAC6B6;
   }
   
   /* Desktop Styles */
@@ -112,7 +116,7 @@ body {
     }
   
     footer nav ul li a {
-      font-size: 16px;
+      font-size: 12px;
     }
   
     button {
