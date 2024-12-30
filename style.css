@@ -131,7 +131,7 @@ button:hover{
   
   .logo img {
 	width: 80%;
-
+	border-radius: 100%;
 	object-fit: contain; /* Garante que o logo seja exibido corretamente */
   }
   
@@ -168,13 +168,22 @@ button:hover{
 	  margin: 0 auto 20px auto; /* Centralizar o logo e adicionar espaçamento */
 	  width: 200px; /* Ajustar o tamanho para maior visibilidade */
 	  height: 200px;
+	  margin-top: 30px;
 	}
-  
+	.logo img{
+		width: 150px; /* Diminui o tamanho do círculo */
+		height: 150px;
+		border-radius: 100%;
+		border-radius: 100%;
+	  }
 	.main {
 	  margin-top: 0; /* Reduz a margem superior para aproximar o formulário */
 	  padding-top: 50px; /* Espaçamento interno para ajustar a posição */
 	}
   }
+
+  
+
 
 
 
@@ -198,6 +207,8 @@ button:hover{
 	}
   }
   
+
+
 
 
 
