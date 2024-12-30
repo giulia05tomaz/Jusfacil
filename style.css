@@ -160,6 +160,31 @@ button:hover{
   
 
 
+  @media (max-width: 820px) {
+	.logo {
+	  top: -20px; /* Ajusta o logo para telas médias */
+	  width: 100px; /* Reduz um pouco o tamanho do círculo */
+	  height: 100px;
+	  transform: translateX(-50%);
+	}
+  
+	.main {
+	  margin-top: 100px; /* Espaçamento extra para manter harmonia */
+	}
+  }
+  
+  @media (max-width: 375px) {
+	.logo {
+	  top: -10px; /* Aproxima ainda mais o logo do formulário */
+	  width: 80px; /* Reduz o tamanho do círculo para telas pequenas */
+	  height: 80px;
+	  transform: translateX(-50%);
+	}
+  
+	.main {
+	  margin-top: 50px; /* Ajusta o espaço entre o logo e o formulário */
+	}
+  }
   
 
   @media (max-width: 768px) {
@@ -177,18 +202,7 @@ button:hover{
 	}
   }
 
-  @media (max-width: 820px) {
-	.logo {
-	  top: -40px; /* Ajusta a posição para telas médias */
-	  width: 120px; /* Reduz o tamanho do círculo */
-	  height: 120px;
-	  transform: translateX(-50%);
-	}
-  
-	.main {
-	  margin-top: 80px; /* Ajusta o espaço para manter o layout harmonioso */
-	}
-  }
+ 
   
   @media (max-width: 375px) {
 	.logo {
