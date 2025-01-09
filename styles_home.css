@@ -210,6 +210,43 @@ footer nav ul li a.active {
 }
 
 
+footer {
+    background-color: #f4f4f4; /* Cor de fundo do footer */
+    padding: 10px 0;
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1); /* Sombras para destaque */
+}
+
+footer nav ul {
+    display: flex;
+    justify-content: space-around; /* Distribui os itens horizontalmente */
+    align-items: center; /* Centraliza verticalmente */
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+footer nav ul li {
+    text-align: center; /* Centraliza os itens dentro da lista */
+    flex: 1; /* Garante espaçamento igual entre os itens */
+}
+
+.footer-item {
+    display: flex;
+    flex-direction: column; /* Alinha ícone e texto verticalmente */
+    align-items: center;
+    text-decoration: none; /* Remove sublinhado */
+    color: #000; /* Cor do texto */
+    font-size: 14px;
+}
+
+.footer-item img {
+    width: 32px; /* Tamanho do ícone */
+    height: 32px; /* Mantém o mesmo tamanho para todos */
+    margin-bottom: 5px; /* Espaçamento entre ícone e texto */
+}
+
+
+
 /* Desktop Styles */
 @media (min-width: 768px) {
     .container {
