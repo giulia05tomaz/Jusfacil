@@ -148,6 +148,66 @@ footer nav ul li a.active {
 }
 
 
+/* Estilo da seção "Ajude nosso aplicativo" */
+.support-app {
+    background-color: #DAC6B6; /* Cor de fundo */
+    padding: 20px;
+    border-radius: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: left; /* Alinha o texto à esquerda */
+    color: #5a4038; /* Cor do texto */
+}
+
+.support-content {
+    display: flex;
+    align-items: center; /* Alinha verticalmente o texto e a imagem */
+    justify-content: space-between; /* Cria espaço entre o texto e a imagem */
+    width: 100%; /* Garante que ocupe toda a largura disponível */
+    max-width: 600px; /* Limita o tamanho máximo */
+    gap: 20px; /* Espaçamento entre texto e imagem */
+}
+
+.text-content {
+    display: flex;
+    flex-direction: column; /* Coloca o título e o botão em uma coluna */
+    gap: 10px; /* Espaçamento entre o título e o botão */
+    flex: 1; /* Garante que o texto ocupe mais espaço */
+}
+
+.text-content h2 {
+    margin: 0;
+    font-size: 18px; /* Ajusta o tamanho do texto */
+    font-weight: bold;
+}
+
+.support-button {
+    padding: 10px 20px;
+    background-color: #ffffff;
+    color: #5a4038;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    width: fit-content; /* Ajusta o botão ao tamanho do texto */
+}
+
+.support-image {
+    width: 120px; /* Ajuste o tamanho conforme necessário */
+    height: auto; /* Mantém a proporção */
+    margin-left: 20px; /* Espaçamento entre o texto e a imagem */
+}
+
+
+.completed a{
+    color: #007BFF;
+}
+
+
+.updates a{
+    color: #007BFF;
+}
 
 
 /* Desktop Styles */
