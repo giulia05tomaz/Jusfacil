@@ -1,59 +1,58 @@
-
 /* Global Styles */
 body {
     margin: 0;
     font-family: Arial, sans-serif;
     background-color: #f4f4f9;
-  }
-  
-  .container {
+}
+
+.container {
     max-width: 480px;
     margin: 0 auto;
     background: #f9f9f9;
-  }
-  
-  /* Header */
-  header {
+}
+
+/* Header */
+header {
     text-align: center;
     padding: 10px;
     background: #eee;
-  }
-  
-  /* Main Content */
-  main {
+}
+
+/* Main Content */
+main {
     padding: 20px;
-  }
-  
-  section {
+}
+
+section {
     margin-bottom: 20px;
     background: white;
     padding: 15px;
     border-radius: 10px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  }
-  
-  section h2 {
+}
+
+section h2 {
     margin-bottom: 10px;
-  }
-  
-  ul {
+}
+
+ul {
     list-style: none;
     padding: 0;
-  }
-  
-  ul li {
+}
+
+ul li {
     display: flex;
     justify-content: space-between;
     padding: 5px 0;
-  }
-  
-  a {
+}
+
+a {
     text-decoration: none;
     color: #007BFF;
     color: #000000;
-  }
-  
-  button {
+}
+
+button {
     width: 100%;
     padding: 10px;
     background: #007BFF;
@@ -62,72 +61,139 @@ body {
     border: none;
     border-radius: 5px;
     cursor: pointer;
-  }
-  
-  /* Footer Navigation */
-  footer {
+}
+
+/* Footer Navigation */
+footer {
     background: #eee;
     padding: 10px;
-  }
-  
-  footer nav ul {
     display: flex;
-    justify-content: space-around;
+    justify-content: center; /* Centraliza os filhos horizontalmente */
+    align-items: center;    /* Centraliza os filhos verticalmente */
+    text-align: center;     /* Garante alinhamento de texto ao centro */
+}
+
+footer nav ul {
+    display: flex;
+    flex-wrap: wrap;        /* Permite que itens quebrem para a próxima linha, se necessário */
+    justify-content: center; /* Centraliza os itens horizontalmente */
+    align-items: center;     /* Centraliza os itens verticalmente */
     list-style: none;
     padding: 0;
     margin: 0;
-  }
-  
-  footer nav ul li a {
+    width: 100%;            /* Garante que ocupe toda a largura disponível */
+}
+
+footer nav ul li {
+    margin: 5px 10px; /* Espaçamento entre os itens */
+}
+
+footer nav ul li a {
     text-decoration: none;
     color: #333;
     font-size: 14px;
-    font-size: 12px;
-  }
-  
-  footer nav ul li a.active {
+}
+
+footer nav ul li a.active {
     font-weight: bold;
     color: #007BFF;
-    color: #ffffff;
-  }
+}
 
-  .new-process{
-    background-color: #DAC6B6;
-  }
-  
-  /* Desktop Styles */
-  @media (min-width: 768px) {
+
+.new-process {
+    background-color: #003b58; /* Fundo azul escuro */
+    padding: 20px;
+    border-radius: 10px;
+    display: flex;
+    justify-content: center; /* Centraliza o conteúdo no container */
+    align-items: center; /* Alinha verticalmente */
+    color: #ffffff; /* Cor do texto */
+}
+
+.new-process .process-content {
+    display: flex;
+    align-items: center; /* Alinha verticalmente o texto e a imagem */
+    justify-content: space-between; /* Garante espaço entre texto e imagem */
+    width: 100%; /* Garante que ocupe toda a largura disponível */
+    max-width: 600px; /* Limita o tamanho máximo */
+}
+
+.new-process .text-content {
+    display: flex;
+    flex-direction: column; /* Coloca o título e botão em uma coluna */
+    gap: 10px; /* Espaçamento entre o título e o botão */
+    flex: 1; /* Garante que o texto ocupe mais espaço */
+}
+
+.new-process h2 {
+    margin: 0;
+    font-size: 18px; /* Tamanho do título */
+}
+
+.new-process .process-button {
+    padding: 10px 20px;
+    background-color: #ffffff;
+    color: #003b58;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    width: fit-content; /* Ajusta o botão ao tamanho do texto */
+}
+
+.new-process .process-image {
+    width: 120px; /* Define o tamanho da imagem */
+    height: auto; /* Mantém a proporção */
+    margin-left: 20px; /* Espaçamento entre o texto e a imagem */
+}
+
+
+
+
+/* Desktop Styles */
+@media (min-width: 768px) {
     .container {
-      max-width: 1000px;
-      margin: 0 auto;
-      background: #ffffff;
+        max-width: 1000px;
+        margin: 0 auto;
+        background: #ffffff;
     }
-  
+
     main {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 20px;
-      padding: 40px;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+        padding: 40px;
     }
-  
+
     section {
-      margin-bottom: 0;
-      padding: 20px;
+        margin-bottom: 0;
+        padding: 20px;
     }
-  
+
     footer nav ul {
-      justify-content: center;
-      gap: 40px;
+        justify-content: center;
+        gap: 40px;
     }
-  
+
     footer nav ul li a {
-      font-size: 16px;
-      font-size: 12px;
+        font-size: 16px;
+        font-size: 12px;
     }
-  
 
     button {
         width: auto;
         padding: 15px 30px;
-      }
     }
+}
+
+
+@media (max-width: 480px) {
+    footer nav ul {
+        flex-direction: row; /* Garante que os itens fiquem em linha */
+        gap: 10px;           /* Adiciona espaçamento entre os itens */
+    }
+
+    footer nav ul li a {
+        font-size: 12px;    /* Reduz o tamanho da fonte para caber melhor */
+    }
+}
