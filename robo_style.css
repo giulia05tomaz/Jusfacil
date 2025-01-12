@@ -26,9 +26,10 @@ body {
     border-bottom: 1px solid #e0e0e0;
 }
 
-.dots, .menu {
+.dots, .close {
     font-size: 18px;
     color: #666;
+    cursor: pointer;
 }
 
 .title {
@@ -36,7 +37,46 @@ body {
     font-weight: bold;
     margin: 0;
     color: #333;
+    flex-grow: 1;
+    text-align: center;
 }
+
+.menu {
+    position: absolute;
+    top: 120px; /* Ajuste a posição vertical conforme necessário */
+    left: 45%;
+    transform: translateX(-50%); /* Centraliza o menu horizontalmente */
+    width: 200px;
+    background-color: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 5px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    display: none;
+    z-index: 1000;
+}
+
+.menu ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.menu ul li {
+    padding: 10px 15px;
+    font-size: 14px;
+    color: #333;
+    cursor: pointer;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.menu ul li:last-child {
+    border-bottom: none;
+}
+
+.menu ul li:hover {
+    background-color: #f9f9f9;
+}
+
 
 .content {
     text-align: center;
@@ -97,4 +137,23 @@ body {
 
 .card p{
     padding: 10px;
+}
+
+@media (max-width: 768px) {
+    .menu {
+        left: 0%; /* Menu alinhado a 30% da largura do viewport */
+        transform: none; /* Remove o ajuste de centralização padrão */
+    }
+}
+
+
+
+
+
+@media (max-width: 768px) {
+    .menu {
+        top: 27%;
+        left: 5%; /* Menu alinhado a 30% da largura do viewport */
+        transform: none; /* Remove o ajuste de centralização padrão */
+    }
 }

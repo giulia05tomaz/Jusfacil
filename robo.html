@@ -8,11 +8,23 @@
 </head>
 <body>
     <div class="container">
-        <header class="header">
-            <span class="dots">•••</span>
-            <h1 class="title">JurisBot</h1>
-            <span class="menu">—</span>
-        </header>
+        <div class="container">
+            <header class="header">
+                <span class="dots" id="menuToggle">•••</span>
+                <h1 class="title">JurisBot</h1>
+                <span class="close">×</span>
+            </header>
+            <div class="menu" id="dropdownMenu">
+                <ul>
+                    <li>Reiniciar conversa</li>
+                    <li>Voltar para Início</li>
+                    <li>Ir para Dashboard</li>
+                    <li>Ir para Perfil</li>
+                    <li>Suporte</li>
+                </ul>
+            </div>
+        </div>
+        <script src="js/robo.js"></script>
         <div class="content">
             <div class="avatar">
                 <!-- Substitua "placeholder.png" pela sua imagem -->
@@ -22,7 +34,7 @@
                 <p>
                     Olá! Eu sou o JusriBot, seu assistente jurídico digital aqui no aplicativo JusFácil. Fui desenvolvido com a mais avançada tecnologia de inteligência artificial para tornar o processo de criação de documentos legais e abertura de pequenas causas simples e acessível para todos.
                 </p>
-                <button class="start-button">Iniciar conversa</button>
+                <a href="chatbot.html" class="start-button">Iniciar conversa</a>
             </div>
         </div>
         <footer class="footer">

@@ -1,0 +1,168 @@
+/* Estilo global */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f2f2f2;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+/* Chat container principal */
+.chat-container {
+    width: 375px;
+    height: 600px;
+    background-color: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Cabeçalho do chatbot */
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background-color: #002B43;
+    color: #ffffff;
+    border-bottom: 1px solid #ccc;
+    position: relative;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+}
+
+.bot-logo {
+    width: 32px;
+    height: 32px;
+    margin-right: 10px;
+    border-radius: 50%;
+}
+
+/* Menu com três pontinhos */
+.menu-button {
+    background: none;
+    border: none;
+    color: #ffffff;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 45px;
+    right: 10px;
+    background-color: #ffffff;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.menu-item {
+    padding: 10px 15px;
+    text-align: left;
+    background-color: #ffffff;
+    border: none;
+    width: 100%;
+    cursor: pointer;
+}
+
+.menu-item:hover {
+    background-color: #f2f2f2;
+}
+
+/* Área de mensagens */
+.chat-messages {
+    flex: 1;
+    padding: 15px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    background-color: #f9f9f9;
+}
+
+/* Barra de rolagem personalizada */
+.chat-messages::-webkit-scrollbar {
+    width: 5px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background-color: #002B43;
+    border-radius: 10px;
+}
+
+/* Estilo das mensagens */
+.message {
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 10px;
+    max-width: 80%;
+    word-wrap: break-word;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.message.user {
+    background-color: #002B43;
+    color: #ffffff;
+    align-self: flex-end;
+}
+
+.message.bot {
+    background-color: #e0e0e0;
+    color: #333333;
+    align-self: flex-start;
+    position: relative;
+}
+
+.message.bot::before {
+    content: '';
+    width: 32px;
+    height: 32px;
+    background: url('img/robo_logo.png') no-repeat center center / contain;
+    border-radius: 50%;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+
+
+/* Input e botão */
+.chat-input {
+    display: flex;
+    padding: 10px;
+    background-color: #ffffff;
+    border-top: 1px solid #ccc;
+}
+
+.chat-input input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 20px;
+    font-size: 14px;
+}
+
+.chat-input button {
+    margin-left: 10px;
+    padding: 10px 15px;
+    background-color: #002B43;
+    color: #ffffff;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.chat-input button:hover {
+    background-color: #003366;
+}
