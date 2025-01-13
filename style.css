@@ -10,7 +10,7 @@ body{
 }
 .main{
 	width: 350px;
-	height: 500px;
+	height: 550px;
 	background: #4d4d4d;
 	overflow: hidden;
 	border-radius: 10px;
@@ -114,11 +114,11 @@ button:hover{
 
 .logo {
 	position: absolute; /* Permite posicionamento livre */
-	top: 5%; /* Move o logo para fora do contêiner principal */
+	top: -2%; /* Move o logo para fora do contêiner principal */
 	left: 50%; /* Centraliza horizontalmente */
 	transform: translateX(-50%); /* Ajusta para alinhar perfeitamente ao centro */
-	width: 160px;
-	height: 160px;
+	width: 150px;
+	height: 150px;
 	border-radius: 50%; /* Faz o círculo */
 	background-color: #fff; /* Fundo branco para destacar o logo */
 	display: flex;
@@ -130,7 +130,7 @@ button:hover{
   }
   
   .logo img {
-	width: 80%;
+	width: 70%;
 	border-radius: 100%;
 	object-fit: contain; /* Garante que o logo seja exibido corretamente */
   }
@@ -144,6 +144,22 @@ button:hover{
 	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
   }
 
+  button#btnCadastrar {
+    display: block;
+    margin: 20px auto;
+    padding: 10px 20px;
+    background-color: #004085;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+button#btnCadastrar:hover {
+    background-color: #002b43;
+}
 
 
 
