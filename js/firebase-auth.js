@@ -33,3 +33,5 @@ export async function autenticarUsuario(email, senhaDigitada) {
         alert("Erro ao autenticar usuário. Verifique sua conexão.");
     }
 }
+
+

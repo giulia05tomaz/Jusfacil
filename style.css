@@ -226,6 +226,60 @@ button#btnCadastrar:hover {
 
 
 
+  .reset-password {
+    text-align: center;
+}
 
+.reset-password label {
+    font-size: 1.5em;
+    color: #4d4d4d;
+    margin-bottom: 10px;
+    display: block;
+    font-weight: bold;
+}
 
-  
+.reset-password input {
+    width: 80%;
+    height: 40px;
+    margin: 10px auto;
+    padding: 5px;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+    outline: none;
+    font-size: 1em;
+}
+
+.reset-password button {
+    width: 50%;
+    height: 40px;
+    margin-top: 20px;
+    background-color: #002b43;
+    color: #fff;
+    font-size: 1em;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.reset-password button:hover {
+    background-color: #005580;
+}
+
+.back-to-login {
+    margin-top: 15px;
+}
+
+.back-to-login a {
+    color: #002b43;
+    text-decoration: none;
+    font-size: 0.9em;
+    font-weight: bold;
+}
+
+.back-to-login a:hover {
+    text-decoration: underline;
+    color: #005580;
+}
+oration: underline;
+}
