@@ -3,15 +3,16 @@ import { getAuth, sendPasswordResetEmail } from "https://www.gstatic.com/firebas
 
 const auth = getAuth();
 
-async function testarEnvioRedefinicao() {
-    const email = "seuemail@dominio.com"; // Substitua pelo e-mail a ser testado
+async function enviarEmailRedefinicao(email) {
     try {
         await sendPasswordResetEmail(auth, email);
-        console.log("E-mail de redefinição enviado com sucesso!");
+        alert("E-mail de redefinição enviado com sucesso! Verifique sua caixa de entrada.");
     } catch (error) {
-        console.error("Erro ao enviar o e-mail de redefinição:", error.message);
+        console.error("Erro ao enviar o e-mail de redefinição:", error.message, error.code);
+        alert(`Erro ao enviar o e-mail: ${error.message}`);
     }
 }
+
 
 testarEnvioRedefinicao();
 // Evento de envio no formulário
