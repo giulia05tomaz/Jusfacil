@@ -2,8 +2,8 @@ const chatMessages = document.getElementById("chatMessages");
 const userInput = document.getElementById("userInput");
 const sendMessage = document.getElementById("sendMessage");
 
-// Chave da API da OpenAI
-const apiKey = "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";
+// Atualize a chave da API aqui
+const apiKey = "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";
 
 // Variável para gerenciar o estado da conversa
 let conversationState = "introducao";
