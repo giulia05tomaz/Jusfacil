@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Central de Ajuda</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f8f8f8;
+        }
+        .help-center {
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        header {
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        nav {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 15px;
+        }
+        nav button {
+            background: none;
+            border: none;
+            font-size: 16px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        nav .active {
+            font-weight: bold;
+            border-bottom: 2px solid black;
+        }
+        .categories {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 15px;
+        }
+        .categories button {
+            background: none;
+            border: none;
+            font-size: 14px;
+            padding: 5px;
+            cursor: pointer;
+        }
+        .categories .active {
+            font-weight: bold;
+            border-bottom: 2px solid black;
+        }
+        .questions h3,
+        .questions .question {
+            display: none;
+        }
+        .questions .question.active {
+            display: block;
+        }
+    </style>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const navButtons = document.querySelectorAll("nav button");
+            const faqSection = document.querySelector(".faq");
+            const contactSection = document.querySelector(".contact");
+            const categoryButtons = document.querySelectorAll(".categories button");
+            const questions = document.querySelectorAll(".questions h3, .questions .question");
+            
+            function showCategory(category) {
+                questions.forEach(item => {
+                    item.style.display = item.classList.contains(category) ? "block" : "none";
+                });
+            }
+            
+            navButtons.forEach(button => {
+                button.addEventListener("click", function() {
+                    navButtons.forEach(btn => btn.classList.remove("active"));
+                    this.classList.add("active");
+                    faqSection.style.display = this.textContent === "Perguntas Frequentes" ? "block" : "none";
+                    contactSection.style.display = this.textContent === "Contato" ? "block" : "none";
+                });
+            });
+            
+            categoryButtons.forEach(button => {
+                button.addEventListener("click", function() {
+                    categoryButtons.forEach(btn => btn.classList.remove("active"));
+                    this.classList.add("active");
+                    showCategory(this.textContent.toLowerCase());
+                });
+            });
+            
+            showCategory("geral");
+        });
+    </script>
+</head>
+<body>
+    <div class="help-center">
+        <header>
+            <h2>Central de Ajuda</h2>
+        </header>
+        <nav>
+            <button class="active">Perguntas Frequentes</button>
+            <button>Contato</button>
+        </nav>
+        
+        <section class="faq">
+            <div class="categories">
+                <button class="active">Geral</button>
+                <button>Conta</button>
+                <button>Pagamento</button>
+                <button>Serviço</button>
+            </div>
+            <div class="questions">
+                <h3 class="geral">Geral</h3>
+                <div class="question geral active">
+                    <h3>O que é o JusFácil?</h3>
+                    <p>O JusFácil é uma plataforma que utiliza inteligência artificial para auxiliar advogados e clientes no acompanhamento e automação de processos jurídicos.</p>
+                </div>
+                <div class="question geral active">
+                    <h3>Os dados dos meus processos são seguros?</h3>
+                    <p>Sim. O JusFácil utiliza criptografia avançada para garantir a segurança dos seus dados e informações processuais.</p>
+                </div>
+                
+                <h3 class="conta">Conta</h3>
+                <div class="question conta">
+                    <h3>Como posso me cadastrar no JusFácil?</h3>
+                    <p>Você pode se cadastrar acessando a página inicial e clicando em "Criar Conta". Preencha os dados necessários e siga as instruções.</p>
+                </div>
+                <div class="question conta">
+                    <h3>Como recuperar minha senha?</h3>
+                    <p>Você pode redefinir sua senha clicando em "Esqueci minha senha" na página de login.</p>
+                </div>
+                
+                <h3 class="pagamento">Pagamento</h3>
+                <div class="question pagamento">
+                    <h3>Quais são as opções de pagamento?</h3>
+                    <p>Aceitamos pagamentos via cartão de crédito, boleto bancário e Pix.</p>
+                </div>
+                <div class="question pagamento">
+                    <h3>Posso cancelar minha assinatura?</h3>
+                    <p>Sim, você pode cancelar sua assinatura a qualquer momento na seção "Minha Conta".</p>
+                </div>
+                
+                <h3 class="serviço">Serviço</h3>
+                <div class="question serviço">
+                    <h3>O JusFácil pode abrir um processo para mim?</h3>
+                    <p>Sim! A plataforma orienta os usuários sobre como iniciar um processo e pode conectar você a advogados parceiros para a melhor assessoria.</p>
+                </div>
+                <div class="question serviço">
+                    <h3>O JusFácil oferece suporte jurídico?</h3>
+                    <p>Sim, contamos com uma equipe de advogados parceiros que podem ajudar você em diversas áreas do direito.</p>
+                </div>
+            </div>
+        </section>
+        
+        <section class="contact" style="display: none;">
+            <h3>Entre em contato conosco</h3>
+            <p>Email: suporte@jusfacil.com</p>
+            <p>Telefone: +55 11 99999-9999</p>
+            <p>Atendimento: Segunda a Sexta, 9h às 18h</p>
+        </section>
+    </div>
+</body>
+</html>
