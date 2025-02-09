@@ -1,11 +1,10 @@
 // Importando as funções necessárias do Firebase
 import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { db } from "./firebase-config.js"; // Importa o Firestore inicializado
+import { criptografar, descriptografar } from "./firebase-config.js";
 
-// Função para autenticar usuário
 export async function autenticarUsuario(email, senhaDigitada) {
     try {
-        // Consulta no Firestore para buscar o usuário pelo email
         const q = query(collection(db, "users"), where("email", "==", email));
         const querySnapshot = await getDocs(q);
 
@@ -14,28 +13,25 @@ export async function autenticarUsuario(email, senhaDigitada) {
             return;
         }
 
-        // Verifica a senha armazenada
         querySnapshot.forEach((doc) => {
             const data = doc.data();
             const senhaArmazenada = data.senha;
 
-            // Verifica a senha
-            if (senhaDigitada === senhaArmazenada) {
+            // Descriptografa a senha salva no banco
+            const senhaDescriptografada = descriptografar(senhaArmazenada);
+
+            // Verifica se a senha digitada é igual à senha salva no Firestore
+            if (senhaDigitada === senhaDescriptografada) {
                 alert("Login bem-sucedido!");
-            
-                // Salvar o nome do usuário no localStorage
                 localStorage.setItem("nomeUsuario", data.nomeCompleto);
-            
-                // Redirecionar para a home
                 window.location.href = "home.html";
-      
             } else {
                 alert("Senha incorreta!");
             }
         });
     } catch (error) {
-        console.error("Erro ao autenticar usuário:", error.message);
-        alert("Erro ao autenticar usuário. Verifique sua conexão.");
+        console.error("Erro na autenticação:", error.message);
+        alert("Erro na autenticação: " + error.message);
     }
 }
 

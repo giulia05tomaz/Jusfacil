@@ -19,9 +19,15 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 
 // Função para criptografar uma string (senha)
-function criptografar(texto) {
+export function criptografar(texto) {
     const textoBase64 = btoa(texto); // Codifica o texto em Base64
     return textoBase64.split("").reverse().join(""); // Reverte a string para segurança adicional
+}
+
+// Função para descriptografar uma senha criptografada
+export function descriptografar(textoCriptografado) {
+    const textoNormal = textoCriptografado.split("").reverse().join(""); // Reverte os caracteres
+    return atob(textoNormal); // Decodifica de Base64 para texto normal
 }
 
 // Função para salvar dados no Firestore
@@ -45,3 +51,4 @@ export async function salvarUsuario(nomeCompleto, email, nomeDeUsuario, senha) {
         alert("Erro ao salvar os dados: " + error.message);
     }
 }
+
