@@ -81,7 +81,7 @@
 						</a>
 					</li>
 					<li>
-						<a href="#" class="footer-item">
+						<a href="perfil.html" class="footer-item">
 							<img src="img/profile-icon.png" alt="Perfil">
 							<span>Perfil</span>
 						</a>
@@ -94,6 +94,15 @@
 
 
 	<script href ="js/robo.js"></script>
+	<script>
+		document.addEventListener("DOMContentLoaded", () => {
+			const nomeUsuario = localStorage.getItem("nomeUsuario");
+			if (!nomeUsuario) {
+				console.warn("Nome do usuário não encontrado no localStorage.");
+			}
+		});
+	</script>
+	
 
 </body>
 

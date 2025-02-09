@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perfil</title>
+</head>
+<body>
+    <h1>Perfil</h1>
+    <h2 id="username">Carregando...</h2>
+    <button id="logout">Sair</button>
+</body>
+</html>
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const nomeUsuario = localStorage.getItem("nomeUsuario") || "Usuário não identificado";
+        document.getElementById("username").textContent = nomeUsuario;
+    });
+</script>
+
+<script type="module" src="js/perfil.js"></script>

@@ -1,7 +1,7 @@
 // Importando as funções necessárias do Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
 import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
-
+import { getAuth } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 // Configuração do Firebase
 const firebaseConfig = {
     apiKey: "AIzaSyAP6wxFvZPN7TsL-qHflz5fgXMr78uD8Wk",
@@ -16,6 +16,7 @@ const firebaseConfig = {
 // Inicializando o Firebase
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+export const auth = getAuth(app);
 
 // Função para criptografar uma string (senha)
 function criptografar(texto) {

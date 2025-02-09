@@ -20,10 +20,15 @@ export async function autenticarUsuario(email, senhaDigitada) {
             const senhaArmazenada = data.senha;
 
             // Verifica a senha
-            if (senhaDigitada === senhaArmazenada) { // Comparação direta para testes
+            if (senhaDigitada === senhaArmazenada) {
                 alert("Login bem-sucedido!");
-                // Redireciona para a página "home.html"
+            
+                // Salvar o nome do usuário no localStorage
+                localStorage.setItem("nomeUsuario", data.nomeCompleto);
+            
+                // Redirecionar para a home
                 window.location.href = "home.html";
+      
             } else {
                 alert("Senha incorreta!");
             }
