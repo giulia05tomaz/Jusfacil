@@ -1,21 +1,110 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Perfil</title>
+   
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f4f4f4;
+        }
+        .profile-container {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 320px;
+        }
+        .profile-pic {
+            position: relative;
+            display: inline-block;
+        }
+        .profile-pic img {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .profile-pic button {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            background: white;
+            border: none;
+            cursor: pointer;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            text-align: left;
+        }
+        form label {
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        form input {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        button {
+            margin-top: 15px;
+            padding: 10px;
+            background: #ff4d4d;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .logout {
+            background: #d9534f;
+        }
+    </style>
 </head>
 <body>
-    <h1>Perfil</h1>
-    <h2 id="username">Carregando...</h2>
-    <button id="logout">Sair</button>
+    <div class="profile-container">
+        <h2>Perfil</h2>
+        <div class="profile-pic">
+            <img id="userPhoto" src="default-profile.png" alt="Foto do Usuário">
+            <input type="file" id="uploadPhoto" hidden>
+            <button id="editPhoto">✏️</button>
+        </div>
+        <h3 id="userName">Nome do Usuário</h3>
+        
+        <form id="profileForm">
+            <label>Email:</label>
+            <input type="email" id="email" disabled>
+            
+            <label>Telefone:</label>
+            <input type="text" id="phone">
+            
+            <label>CPF:</label>
+            <input type="text" id="cpf" disabled>
+            
+            <label>Senha:</label>
+            <input type="password" id="password">
+        </form>
+        
+        <button id="saveProfile">Salvar</button>
+        <button id="logout" class="logout">Logout</button>
+    </div>
+
+    <script type="module" src="js/perfil.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const nomeUsuario = localStorage.getItem("nomeUsuario") || "Usuário não identificado";
+            document.getElementById("username").textContent = nomeUsuario;
+        });
+    </script>
 </body>
 </html>
-<script>
-    document.addEventListener("DOMContentLoaded", () => {
-        const nomeUsuario = localStorage.getItem("nomeUsuario") || "Usuário não identificado";
-        document.getElementById("username").textContent = nomeUsuario;
-    });
-</script>
-
-<script type="module" src="js/perfil.js"></script>
