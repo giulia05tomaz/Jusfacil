@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-labelledby="title description">
+  <title id="title">Modelo de dados do JusFácil no Firestore</title>
+  <description id="description">Usuários criam casos, que contêm mensagens, minutas e evidências; notificações e tickets de suporte pertencem a usuários.</description>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#d49a57"/></marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#071820" flood-opacity=".32"/></filter>
+    <style>
+      .box{fill:#173746;stroke:#d49a57;stroke-width:2;rx:14;filter:url(#shadow)}
+      .box-secondary{fill:#1f4655;stroke:#77c8bd;stroke-width:2;rx:14;filter:url(#shadow)}
+      .title{font:700 21px Arial,sans-serif;fill:#fff7eb;letter-spacing:.5px}
+      .field{font:14px Arial,sans-serif;fill:#d7e7e9}
+      .caption{font:16px Arial,sans-serif;fill:#9fc6ca}
+      .line{fill:none;stroke:#d49a57;stroke-width:2.5;marker-end:url(#arrow)}
+      .line-alt{fill:none;stroke:#77c8bd;stroke-width:2;stroke-dasharray:7 6;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1280" height="760" fill="#0c2733"/>
+  <text x="56" y="55" class="title" font-size="30">JusFácil · Estrutura do Firestore</text>
+  <text x="56" y="84" class="caption">Coleções principais e subcoleções por caso</text>
+
+  <path class="line" d="M300 205 C360 205 368 205 424 205"/>
+  <path class="line" d="M686 184 C760 140 786 140 850 154"/>
+  <path class="line" d="M686 215 C770 215 783 260 850 270"/>
+  <path class="line" d="M686 246 C760 320 786 378 850 390"/>
+  <path class="line-alt" d="M177 285 C177 382 177 410 177 478"/>
+  <path class="line-alt" d="M250 275 C354 380 387 416 452 478"/>
+  <path class="line-alt" d="M1024 490 C1024 555 1024 567 1024 621"/>
+  <path class="line-alt" d="M850 435 C752 500 707 550 650 620"/>
+
+  <g transform="translate(55 125)"><rect class="box" width="245" height="160"/><text x="22" y="36" class="title">USER</text><text x="22" y="67" class="field">uid · fullName · email</text><text x="22" y="91" class="field">role · cpf · phone</text><text x="22" y="115" class="field">username · lawyerStatus</text><text x="22" y="139" class="field">createdAt · updatedAt</text></g>
+  <g transform="translate(425 115)"><rect class="box" width="262" height="180"/><text x="22" y="36" class="title">CASE</text><text x="22" y="67" class="field">caseId · citizenId</text><text x="22" y="91" class="field">assignedLawyerId · title</text><text x="22" y="115" class="field">category · status · summary</text><text x="22" y="139" class="field">structuredData</text><text x="22" y="163" class="field">currentDraftVersion</text></g>
+  <g transform="translate(850 95)"><rect class="box-secondary" width="370" height="118"/><text x="22" y="36" class="title">MESSAGE</text><text x="22" y="67" class="field">messageId · caseId · sender · senderName</text><text x="22" y="91" class="field">content · timestamp</text></g>
+  <g transform="translate(850 235)"><rect class="box-secondary" width="370" height="118"/><text x="22" y="36" class="title">DRAFT</text><text x="22" y="67" class="field">version · caseId · title · content · approved</text><text x="22" y="91" class="field">feedback · source · changeSummary · createdAt</text></g>
+  <g transform="translate(850 375)"><rect class="box-secondary" width="370" height="128"/><text x="22" y="36" class="title">EVIDENCE</text><text x="22" y="67" class="field">evidenceId · caseId · originalName · mimeType</text><text x="22" y="91" class="field">storagePath · status · fileUrl · uploadedAt</text><text x="22" y="115" class="field">extractedText · analysis · confidence</text></g>
+  <g transform="translate(55 480)"><rect class="box-secondary" width="285" height="125"/><text x="22" y="36" class="title">NOTIFICATION</text><text x="22" y="67" class="field">notificationId · userId · caseId</text><text x="22" y="91" class="field">title · message · type · read</text></g>
+  <g transform="translate(390 480)"><rect class="box-secondary" width="300" height="125"/><text x="22" y="36" class="title">SUPPORT_TICKET</text><text x="22" y="67" class="field">ticketId · userId · category</text><text x="22" y="91" class="field">subject · message · status</text></g>
+  <g transform="translate(835 620)"><rect class="box" width="190" height="90"/><text x="22" y="36" class="title">LAWYER</text><text x="22" y="66" class="field">role · OAB · status</text></g>
+  <g transform="translate(1050 620)"><rect class="box" width="170" height="90"/><text x="22" y="36" class="title">ADMIN</text><text x="22" y="66" class="field">role · review</text></g>
+  <text x="425" y="328" class="caption">messages / drafts / evidences são subcoleções de cada caso</text>
+</svg>

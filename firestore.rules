@@ -1,0 +1,115 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function own(uid) { return signedIn() && request.auth.uid == uid; }
+    function userData() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function admin() { return signedIn() && userData().role == 'ADMIN'; }
+    function approvedLawyer() { return signedIn() && userData().role == 'LAWYER' && userData().lawyerStatus == 'APPROVED'; }
+    function assignedLawyer(caseData) { return approvedLawyer() && caseData.assignedLawyerId == request.auth.uid; }
+    function caseOwner(caseData) { return signedIn() && caseData.citizenId == request.auth.uid; }
+    function caseAccess(caseData) { return caseOwner(caseData) || assignedLawyer(caseData) || admin(); }
+    function caseDoc(caseId) { return get(/databases/$(database)/documents/cases/$(caseId)).data; }
+    function caseAccessById(caseId) { return caseAccess(caseDoc(caseId)); }
+
+    match /users/{uid} {
+      allow read: if own(uid) || admin();
+      allow create: if own(uid)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.role in ['CITIZEN', 'LAWYER']
+        && (request.resource.data.role == 'CITIZEN'
+          ? !request.resource.data.keys().hasAny(['lawyerStatus', 'lawyerReviewedBy', 'lawyerReviewedAt'])
+          : request.resource.data.lawyerStatus == 'PENDING');
+      allow update: if (own(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'phone', 'cpf', 'username', 'avatarUrl', 'updatedAt']))
+        || admin();
+      allow delete: if admin();
+    }
+
+    match /publicProfiles/{uid} {
+      allow read: if signedIn();
+      allow write: if admin();
+    }
+
+    match /cases/{caseId} {
+      allow read: if caseAccess(resource.data);
+      allow create: if signedIn()
+        && request.resource.data.citizenId == request.auth.uid
+        && request.resource.data.caseId == caseId
+        && request.resource.data.status == 'TRIAGEM'
+        && request.resource.data.requiresHumanReview == false
+        && !request.resource.data.keys().hasAny(['assignedLawyerId', 'assignedLawyerName', 'courtProcessNumber']);
+      allow update: if admin()
+        || (caseOwner(resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'category', 'summary', 'originalStory', 'structuredData', 'updatedAt', 'currentDraftVersion']))
+        || (caseOwner(resource.data)
+          && resource.data.status == 'AGUARDANDO_REVISAO'
+          && request.resource.data.status == 'MINUTA_APROVADA'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'currentDraftVersion', 'updatedAt']))
+        || (assignedLawyer(resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'summary', 'structuredData', 'currentDraftVersion', 'updatedAt'])
+          && request.resource.data.status in ['AGUARDANDO_REVISAO', 'EM_ANDAMENTO', 'CONCLUIDO']);
+      allow delete: if admin();
+
+      match /messages/{messageId} {
+        allow read: if caseAccessById(caseId);
+        allow create: if caseAccessById(caseId)
+          && request.resource.data.caseId == caseId
+          && ((caseOwner(caseDoc(caseId)) && request.resource.data.sender == 'USER')
+            || (assignedLawyer(caseDoc(caseId)) && request.resource.data.sender == 'LAWYER')
+            || admin());
+        allow update, delete: if admin();
+      }
+
+      match /drafts/{draftId} {
+        allow read: if caseAccessById(caseId);
+        allow create: if admin()
+          || (caseAccessById(caseId)
+            && request.resource.data.caseId == caseId
+            && request.resource.data.approved == false
+            && request.resource.data.createdBy == request.auth.uid);
+        allow update: if admin()
+          || (caseOwner(caseDoc(caseId))
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved', 'approvedAt', 'approvedBy'])
+            && request.resource.data.approved == true
+            && request.resource.data.approvedBy == request.auth.uid)
+          || (assignedLawyer(caseDoc(caseId))
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['content', 'title', 'changeSummary']));
+        allow delete: if admin();
+      }
+
+      match /evidences/{evidenceId} {
+        allow read: if caseAccessById(caseId);
+        allow create: if caseAccessById(caseId)
+          && request.resource.data.caseId == caseId
+          && request.resource.data.uploadedBy == request.auth.uid
+          && request.resource.data.status == 'QUEUED';
+        allow update: if admin()
+          || (caseAccessById(caseId)
+            && resource.data.uploadedBy == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'fileUrl', 'processingError']));
+        allow delete: if admin()
+          || (caseOwner(caseDoc(caseId)) && resource.data.uploadedBy == request.auth.uid
+            && caseDoc(caseId).status in ['TRIAGEM', 'COLETANDO_INFORMACOES', 'AGUARDANDO_INFORMACOES', 'COLETANDO_EVIDENCIAS', 'NECESSITA_ESCLARECIMENTO']);
+      }
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if admin();
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+        && request.resource.data.read == true;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /supportTickets/{ticketId} {
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'OPEN';
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || admin());
+      allow update, delete: if admin();
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}

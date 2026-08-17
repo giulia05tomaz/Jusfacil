@@ -2,9 +2,6 @@ const chatMessages = document.getElementById("chatMessages");
 const userInput = document.getElementById("userInput");
 const sendMessage = document.getElementById("sendMessage");
 
-// Atualize a chave da API aqui
-const apiKey = "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";
-
 // Variável para gerenciar o estado da conversa
 let conversationState = "introducao";
 
@@ -19,39 +16,18 @@ function appendMessage(sender, message) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Função para enviar mensagens para a API da OpenAI
+// Função para enviar mensagens para o servidor
 async function sendToGPT(message) {
-    const endpoint = "https://api.openai.com/v1/chat/completions";
-
-    const headers = {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-    };
-
-    // Configura o conteúdo da mensagem baseado no estado da conversa
-    let systemMessage = "";
-
-    if (conversationState === "introducao") {
-        systemMessage = "Você é o JurisBot, um assistente jurídico digital. Quando o cliente disser 'Oi', peça para descrever os fatos detalhadamente.";
-    } else if (conversationState === "descricao_fatos") {
-        systemMessage = "Você é o JurisBot, um assistente jurídico digital. Após o cliente descrever os fatos, peça evidências relacionadas ao caso.";
-    } else if (conversationState === "coleta_evidencias") {
-        systemMessage = "Você é o JurisBot, um assistente jurídico digital. Agradeça ao cliente pelas evidências enviadas e informe que a área competente dará continuidade ao processo.";
-    }
-
-    const body = JSON.stringify({
-        model: "gpt-3.5-turbo",
-        messages: [
-            { role: "system", content: systemMessage },
-            { role: "user", content: message },
-        ],
-    });
-
     try {
-        const response = await fetch(endpoint, {
+        const response = await fetch("/chat", {
             method: "POST",
-            headers: headers,
-            body: body,
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                message: message,
+                conversationState: conversationState,
+            }),
         });
 
         if (!response.ok) {
@@ -60,7 +36,7 @@ async function sendToGPT(message) {
         }
 
         const data = await response.json();
-        return data.choices[0].message.content; // Extrai a resposta do bot
+        return data.reply || "Desculpe, ocorreu um erro ao obter resposta.";
     } catch (error) {
         console.error("Erro ao se comunicar com a API:", error);
         return "Desculpe, ocorreu um erro ao conectar ao servidor.";

@@ -1,0 +1,17 @@
+.env
+.env.local
+.env.production
+.env*.local
+!.env.example
+serviceAccount*.json
+*.pem
+node_modules/
+.next/
+coverage/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+*.log
+*.tsbuildinfo
+outputs/
+*.zip

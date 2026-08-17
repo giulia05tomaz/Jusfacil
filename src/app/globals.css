@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --jus-petroleum: #002B43;
+    --jus-caramel: #C08A4E;
+    --jus-darkgray: #4A4A4A;
+    --jus-canvas: #F8FAFC;
+  }
+
+  body {
+    background-color: var(--jus-canvas);
+    color: #1E293B;
+    font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  h1, h2, h3, .font-serif-brand {
+    font-family: "Playfair Display", "Georgia", serif;
+  }
+}
+
+/* Custom scrollbar for chat and process lists */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #002B43;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #001D2E;
+}

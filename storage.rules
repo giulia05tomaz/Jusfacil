@@ -1,0 +1,39 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function userData() { return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data; }
+    function admin() { return signedIn() && userData().role == 'ADMIN'; }
+    function caseData(caseId) { return firestore.get(/databases/(default)/documents/cases/$(caseId)).data; }
+    function owner(caseId) { return signedIn() && caseData(caseId).citizenId == request.auth.uid; }
+    function assignedApprovedLawyer(caseId) {
+      return signedIn()
+        && userData().role == 'LAWYER'
+        && userData().lawyerStatus == 'APPROVED'
+        && caseData(caseId).assignedLawyerId == request.auth.uid;
+    }
+    function participant(caseId) { return owner(caseId) || assignedApprovedLawyer(caseId) || admin(); }
+    function validFile() {
+      return request.resource.size > 0
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType in [
+          'application/pdf', 'image/png', 'image/jpeg', 'text/plain', 'text/csv',
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ];
+    }
+
+    match /cases/{caseId}/evidences/{evidenceId}/{fileName} {
+      allow read: if participant(caseId);
+      allow create: if participant(caseId)
+        && request.resource.metadata.uploadedBy == request.auth.uid
+        && request.resource.metadata.evidenceId == evidenceId
+        && validFile();
+      allow update: if false;
+      allow delete: if admin() || (participant(caseId) && resource.metadata.uploadedBy == request.auth.uid);
+    }
+
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}
