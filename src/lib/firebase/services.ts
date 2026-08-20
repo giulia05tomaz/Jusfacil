@@ -23,6 +23,32 @@ import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from "firebas
 import { db, isFirebaseConfigured, storage } from "./config";
 import { AppError, toAppError } from "@/lib/errors";
 import { assertCaseStatusTransition } from "@/lib/cases/statusMachine";
+import { UI_DEV_MODE } from "@/lib/devMode";
+import {
+  devAddCaseMessage,
+  devAddEvidence,
+  devCreateLegalCase,
+  devCreateSupportTicket,
+  devDeleteNotification,
+  devGetCaseById,
+  devGetCaseDrafts,
+  devGetCaseEvidences,
+  devGetCaseMessages,
+  devGetCaseUpdates,
+  devGetUserCases,
+  devGetUserNotifications,
+  devGetUserProfile,
+  devGetUserSupportTickets,
+  devMarkAllNotificationsAsRead,
+  devMarkNotificationAsRead,
+  devRemoveEvidence,
+  devSaveDraftVersion,
+  devSubscribeToNotifications,
+  devUpdateCaseStatus,
+  devUpdateUserProfile,
+  devUploadEvidenceFile,
+  devUploadUserAvatar,
+} from "@/lib/dev/mockStore";
 import type {
   CaseMessage,
   CaseStatus,
@@ -96,6 +122,7 @@ export function sanitizeFileName(name: string): string {
 }
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
+  if (UI_DEV_MODE) return devGetUserProfile(uid);
   assertConfigured();
   try {
     const snapshot = await getDoc(doc(db, "users", uid));
@@ -123,6 +150,7 @@ export async function createUserProfile(profile: UserProfile): Promise<void> {
 }
 
 export async function updateUserProfile(uid: string, updates: Partial<UserProfile>): Promise<void> {
+  if (UI_DEV_MODE) return devUpdateUserProfile(uid, updates);
   assertConfigured();
   const allowed = ["fullName", "phone", "cpf", "username", "avatarUrl"] as const;
   const safeUpdates = Object.fromEntries(allowed.filter((key) => updates[key] !== undefined).map((key) => [key, updates[key]]));
@@ -134,6 +162,7 @@ export async function updateUserProfile(uid: string, updates: Partial<UserProfil
 }
 
 export async function getUserCases(userId: string, role: string): Promise<LegalCase[]> {
+  if (UI_DEV_MODE) return devGetUserCases(userId, role);
   assertConfigured();
   if (!userId) throw new AppError("AUTH_REQUIRED");
   try {
@@ -145,6 +174,7 @@ export async function getUserCases(userId: string, role: string): Promise<LegalC
 }
 
 export async function getCaseById(caseId: string): Promise<LegalCase | null> {
+  if (UI_DEV_MODE) return devGetCaseById(caseId);
   assertConfigured();
   try {
     const snapshot = await getDoc(doc(db, "cases", caseId));
@@ -155,6 +185,7 @@ export async function getCaseById(caseId: string): Promise<LegalCase | null> {
 }
 
 export async function createLegalCase(caseData: LegalCase): Promise<string> {
+  if (UI_DEV_MODE) return devCreateLegalCase(caseData);
   assertConfigured();
   if (!caseData.caseId.startsWith("JF-")) throw new AppError("VALIDATION_ERROR", "Use um protocolo interno JusFácil válido.");
   try {
@@ -166,6 +197,7 @@ export async function createLegalCase(caseData: LegalCase): Promise<string> {
 }
 
 export async function updateCaseStatus(caseId: string, status: CaseStatus, extraUpdates: Partial<LegalCase> = {}): Promise<void> {
+  if (UI_DEV_MODE) return devUpdateCaseStatus(caseId, status, extraUpdates);
   assertConfigured();
   try {
     const caseRef = doc(db, "cases", caseId);
@@ -183,6 +215,7 @@ export async function updateCaseStatus(caseId: string, status: CaseStatus, extra
 }
 
 export async function getCaseMessages(caseId: string): Promise<CaseMessage[]> {
+  if (UI_DEV_MODE) return devGetCaseMessages(caseId);
   assertConfigured();
   try {
     return mapSnapshot<CaseMessage>(await getDocs(query(collection(db, "cases", caseId, "messages"), orderBy("timestamp", "asc"), limit(100))));
@@ -192,6 +225,7 @@ export async function getCaseMessages(caseId: string): Promise<CaseMessage[]> {
 }
 
 export async function addCaseMessage(message: CaseMessage): Promise<void> {
+  if (UI_DEV_MODE) return devAddCaseMessage(message);
   assertConfigured();
   try {
     await setDoc(doc(db, "cases", message.caseId, "messages", message.messageId), withoutUndefined({ ...message, timestamp: serverTimestamp() }));
@@ -201,6 +235,7 @@ export async function addCaseMessage(message: CaseMessage): Promise<void> {
 }
 
 export async function getCaseDrafts(caseId: string): Promise<DraftVersion[]> {
+  if (UI_DEV_MODE) return devGetCaseDrafts(caseId);
   assertConfigured();
   try {
     return mapSnapshot<DraftVersion>(await getDocs(query(collection(db, "cases", caseId, "drafts"), orderBy("version", "desc"), limit(50))));
@@ -210,6 +245,7 @@ export async function getCaseDrafts(caseId: string): Promise<DraftVersion[]> {
 }
 
 export async function saveDraftVersion(draft: DraftVersion): Promise<void> {
+  if (UI_DEV_MODE) return devSaveDraftVersion(draft);
   assertConfigured();
   try {
     await setDoc(doc(db, "cases", draft.caseId, "drafts", `v${draft.version}`), withoutUndefined({ ...draft, approved: false, createdAt: serverTimestamp() }));
@@ -219,6 +255,7 @@ export async function saveDraftVersion(draft: DraftVersion): Promise<void> {
 }
 
 export async function getCaseEvidences(caseId: string): Promise<Evidence[]> {
+  if (UI_DEV_MODE) return devGetCaseEvidences(caseId);
   assertConfigured();
   try {
     return mapSnapshot<Evidence>(await getDocs(query(collection(db, "cases", caseId, "evidences"), orderBy("uploadedAt", "desc"))));
@@ -228,6 +265,7 @@ export async function getCaseEvidences(caseId: string): Promise<Evidence[]> {
 }
 
 export async function addEvidence(evidence: Evidence): Promise<void> {
+  if (UI_DEV_MODE) return devAddEvidence(evidence);
   assertConfigured();
   try {
     await setDoc(doc(db, "cases", evidence.caseId, "evidences", evidence.evidenceId), withoutUndefined({ ...evidence, uploadedAt: serverTimestamp() }));
@@ -237,6 +275,10 @@ export async function addEvidence(evidence: Evidence): Promise<void> {
 }
 
 export async function uploadEvidenceFile(file: File, caseId: string, userId: string, description?: string, onProgress?: (progress: number) => void): Promise<Evidence> {
+  if (UI_DEV_MODE) {
+    validateEvidenceFile(file);
+    return devUploadEvidenceFile(file, caseId, userId, description, onProgress);
+  }
   assertConfigured();
   validateEvidenceFile(file);
   const evidenceId = crypto.randomUUID();
@@ -273,6 +315,7 @@ export async function uploadEvidenceFile(file: File, caseId: string, userId: str
 }
 
 export async function removeEvidence(evidence: Evidence): Promise<void> {
+  if (UI_DEV_MODE) return devRemoveEvidence(evidence);
   assertConfigured();
   try {
     if (evidence.storagePath) await deleteObject(ref(storage, evidence.storagePath));
@@ -283,12 +326,14 @@ export async function removeEvidence(evidence: Evidence): Promise<void> {
 }
 
 export function subscribeToNotifications(userId: string, onData: (items: NotificationItem[]) => void, onError?: (error: AppError) => void) {
+  if (UI_DEV_MODE) return devSubscribeToNotifications(userId, onData);
   assertConfigured();
   const notificationsQuery = query(collection(db, "notifications"), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(100));
   return onSnapshot(notificationsQuery, (snapshot) => onData(mapSnapshot<NotificationItem>(snapshot)), (error) => onError?.(toAppError(error, "FIREBASE_UNAVAILABLE")));
 }
 
 export async function getUserNotifications(userId: string): Promise<NotificationItem[]> {
+  if (UI_DEV_MODE) return devGetUserNotifications(userId);
   assertConfigured();
   try {
     return mapSnapshot<NotificationItem>(await getDocs(query(collection(db, "notifications"), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(100))));
@@ -298,18 +343,87 @@ export async function getUserNotifications(userId: string): Promise<Notification
 }
 
 export async function markNotificationAsRead(notificationId: string): Promise<void> {
+  if (UI_DEV_MODE) return devMarkNotificationAsRead(notificationId);
   assertConfigured();
   await updateDoc(doc(db, "notifications", notificationId), { read: true });
 }
 
 export async function markAllNotificationsAsRead(items: NotificationItem[]): Promise<void> {
+  if (UI_DEV_MODE) return devMarkAllNotificationsAsRead(items);
   assertConfigured();
   const batch = writeBatch(db);
   items.filter((item) => !item.read).forEach((item) => batch.update(doc(db, "notifications", item.notificationId), { read: true }));
   await batch.commit();
 }
 
+export async function deleteNotification(notificationId: string): Promise<void> {
+  if (UI_DEV_MODE) return devDeleteNotification(notificationId);
+  assertConfigured();
+  try {
+    await deleteDoc(doc(db, "notifications", notificationId));
+  } catch (error) {
+    throw toAppError(error, "FIREBASE_UNAVAILABLE");
+  }
+}
+
+export async function getCaseUpdates(caseId: string): Promise<import("@/types").CaseUpdate[]> {
+  if (UI_DEV_MODE) return devGetCaseUpdates(caseId);
+  assertConfigured();
+  try {
+    return mapSnapshot<import("@/types").CaseUpdate>(
+      await getDocs(query(collection(db, "cases", caseId, "updates"), orderBy("createdAt", "desc"), limit(50)))
+    );
+  } catch (error) {
+    throw toAppError(error, "FIREBASE_UNAVAILABLE");
+  }
+}
+
+
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+const ALLOWED_AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+export function validateAvatarFile(file: Pick<File, "size" | "type">): void {
+  if (!file.size) throw new AppError("VALIDATION_ERROR", "A imagem está vazia.");
+  if (file.size > MAX_AVATAR_BYTES) throw new AppError("VALIDATION_ERROR", "A imagem deve ter no máximo 5 MB.");
+  if (!ALLOWED_AVATAR_TYPES.has(file.type.toLowerCase())) {
+    throw new AppError("VALIDATION_ERROR", "Use uma imagem JPG, PNG ou WEBP.");
+  }
+}
+
+export async function uploadUserAvatar(uid: string, file: File): Promise<string> {
+  if (UI_DEV_MODE) {
+    validateAvatarFile(file);
+    return devUploadUserAvatar(uid, file);
+  }
+  assertConfigured();
+  validateAvatarFile(file);
+  const extension = file.type === "image/png" ? ".png" : file.type === "image/webp" ? ".webp" : ".jpg";
+  const storagePath = `profiles/${uid}/avatar${extension}`;
+  const storageRef = ref(storage, storagePath);
+  try {
+    const task = await uploadBytesResumable(storageRef, file, { contentType: file.type });
+    const url = await getDownloadURL(task.ref);
+    await updateUserProfile(uid, { avatarUrl: url });
+    return url;
+  } catch (error) {
+    throw toAppError(error, "FIREBASE_UNAVAILABLE");
+  }
+}
+
+export async function getUserSupportTickets(userId: string): Promise<SupportTicket[]> {
+  if (UI_DEV_MODE) return devGetUserSupportTickets(userId);
+  assertConfigured();
+  try {
+    return mapSnapshot<SupportTicket>(
+      await getDocs(query(collection(db, "supportTickets"), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(50)))
+    );
+  } catch (error) {
+    throw toAppError(error, "FIREBASE_UNAVAILABLE");
+  }
+}
+
 export async function createSupportTicket(ticket: Omit<SupportTicket, "ticketId" | "status" | "createdAt" | "updatedAt">): Promise<string> {
+  if (UI_DEV_MODE) return devCreateSupportTicket(ticket);
   assertConfigured();
   const ticketId = crypto.randomUUID();
   await setDoc(doc(db, "supportTickets", ticketId), withoutUndefined({

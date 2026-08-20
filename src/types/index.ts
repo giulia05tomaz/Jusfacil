@@ -61,6 +61,8 @@ export interface LegalCase {
   assignedLawyerName?: string;
   title: string;
   category: string;
+  legalArea?: string;
+  courtProcessNumber?: string;
   summary: string;
   originalStory: string;
   status: CaseStatus;
@@ -172,4 +174,21 @@ export interface CaseEligibilityResult {
   path: 'SELF_SERVICE' | 'HUMAN_REVIEW';
   reasons: string[];
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+}
+
+export interface CaseUpdate {
+  updateId: string;
+  caseId: string;
+  createdBy: string;
+  createdByName?: string;
+  createdByRole: 'LAWYER' | 'ADMIN' | 'SYSTEM';
+  authorName?: string;
+  authorRole?: 'LAWYER' | 'ADMIN' | 'SYSTEM';
+  courtProcessNumber?: string;
+  message: string;
+  documentEvidenceId?: string;
+  documentName?: string;
+  documentUrl?: string;
+  createdAt: string;
+  visibleToCitizen: boolean;
 }

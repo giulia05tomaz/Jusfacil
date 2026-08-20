@@ -43,6 +43,89 @@ function errorResponse(error: string, message: string, status: number, headers?:
   return NextResponse.json({ error, message }, { status, headers });
 }
 
+type OpenAIErrorLike = {
+  status?: number;
+  code?: string;
+  error?: { code?: string };
+  name?: string;
+  request_id?: string;
+  requestId?: string;
+};
+
+export function classifyOpenAIError(error: unknown) {
+  const apiError = error as OpenAIErrorLike;
+  const upstreamStatus = apiError.status;
+  const upstreamCode = apiError.code || apiError.error?.code;
+  const requestId = apiError.request_id || apiError.requestId;
+  const errorType = error instanceof Error ? error.name : apiError.name || "unknown";
+
+  if (upstreamStatus === 401) {
+    return {
+      error: "AI_AUTHENTICATION_FAILED",
+      message: "O JurisBot está temporariamente indisponível. Tente novamente mais tarde.",
+      status: 503,
+      upstreamStatus,
+      upstreamCode,
+      requestId,
+      errorType,
+    };
+  }
+  if (upstreamStatus === 429) {
+    return {
+      error: "AI_QUOTA_EXCEEDED",
+      message: "O JurisBot está temporariamente indisponível para gerar uma resposta. Tente novamente mais tarde.",
+      status: 503,
+      upstreamStatus,
+      upstreamCode,
+      requestId,
+      errorType,
+    };
+  }
+  if (upstreamStatus === 400) {
+    return {
+      error: "AI_INVALID_REQUEST",
+      message: "Não foi possível processar esta solicitação. Revise a mensagem e tente novamente.",
+      status: 502,
+      upstreamStatus,
+      upstreamCode,
+      requestId,
+      errorType,
+    };
+  }
+  if (upstreamStatus && upstreamStatus >= 500) {
+    return {
+      error: "AI_UPSTREAM_ERROR",
+      message: "O JurisBot está temporariamente indisponível. Tente novamente mais tarde.",
+      status: 503,
+      upstreamStatus,
+      upstreamCode,
+      requestId,
+      errorType,
+    };
+  }
+  if (["APIConnectionError", "APIConnectionTimeoutError"].includes(errorType)
+    || ["ECONNRESET", "ETIMEDOUT"].includes(upstreamCode || "")) {
+    return {
+      error: "AI_NETWORK_ERROR",
+      message: "Não foi possível conectar ao JurisBot. Tente novamente mais tarde.",
+      status: 503,
+      upstreamStatus,
+      upstreamCode,
+      requestId,
+      errorType,
+    };
+  }
+  return {
+    error: "AI_UNAVAILABLE",
+    message: "O JurisBot está temporariamente indisponível. Tente novamente mais tarde.",
+    status: 503,
+    upstreamStatus,
+    upstreamCode,
+    requestId,
+    errorType,
+  };
+}
+
 export async function POST(request: Request) {
   const authHeader = request.headers.get("authorization");
   if (!authHeader?.startsWith("Bearer ")) return errorResponse("AUTH_REQUIRED", "Faça login para continuar.", 401);
@@ -170,14 +253,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json(payload);
   } catch (error) {
-    const apiError = error as { status?: number; code?: string; error?: { code?: string }; message?: string };
+    const failure = classifyOpenAIError(error);
     logger.error("jurisbot_request_failed", {
-      uid,
-      errorType: error instanceof Error ? error.name : "unknown",
-      upstreamStatus: apiError.status,
-      upstreamCode: apiError.code || apiError.error?.code,
-      upstreamMessage: apiError.message?.slice(0, 300),
+      errorType: failure.errorType,
+      upstreamStatus: failure.upstreamStatus,
+      upstreamCode: failure.upstreamCode,
+      requestId: failure.requestId,
     });
-    return errorResponse("AI_UNAVAILABLE", "O JurisBot está temporariamente indisponível. Tente novamente.", 503);
+    return errorResponse(failure.error, failure.message, failure.status);
   }
 }

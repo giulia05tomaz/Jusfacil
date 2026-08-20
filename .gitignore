@@ -2,8 +2,12 @@
 .env.local
 .env.production
 .env*.local
+.env.*.local
 !.env.example
 serviceAccount*.json
+service-account*.json
+firebase-admin*.json
+credentials*.json
 *.pem
 node_modules/
 .next/

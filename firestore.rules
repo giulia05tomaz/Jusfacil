@@ -92,6 +92,13 @@ service cloud.firestore {
           || (caseOwner(caseDoc(caseId)) && resource.data.uploadedBy == request.auth.uid
             && caseDoc(caseId).status in ['TRIAGEM', 'COLETANDO_INFORMACOES', 'AGUARDANDO_INFORMACOES', 'COLETANDO_EVIDENCIAS', 'NECESSITA_ESCLARECIMENTO']);
       }
+
+      match /updates/{updateId} {
+        // Updates are created atomically by a trusted server route (Firebase Admin).
+        // Clients may only read updates for cases they are already authorized to access.
+        allow read: if caseAccessById(caseId);
+        allow create, update, delete: if false;
+      }
     }
 
     match /notifications/{notificationId} {

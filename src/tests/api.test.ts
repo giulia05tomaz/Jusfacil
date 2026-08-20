@@ -89,4 +89,30 @@ describe("POST /api/chat/jurisbot", () => {
     const response = await POST(request("citizen-a"));
     expect({ status: response.status, body: await response.json(), parseCalls: parseAi.mock.calls.length, messageCalls: setMessage.mock.calls.length }).toEqual({ status: 200, body: { reply: "Pergunta seguinte", structuredData: null }, parseCalls: 1, messageCalls: 1 });
   });
+
+  it.each([
+    [401, "invalid_api_key", "AI_AUTHENTICATION_FAILED", 503],
+    [429, "credit_balance_exhausted", "AI_QUOTA_EXCEEDED", 503],
+    [500, "server_error", "AI_UPSTREAM_ERROR", 503],
+  ])("classifica erro OpenAI %i sem expor detalhes", async (upstreamStatus, code, expectedError, expectedStatus) => {
+    getCase.mockResolvedValue(caseSnapshot({ citizenId: "citizen-a", originalStory: "Teste", status: "TRIAGEM" }));
+    parseAi.mockRejectedValueOnce({ status: upstreamStatus, code, request_id: "req-test" });
+    const { POST } = await import("@/app/api/chat/jurisbot/route");
+    const response = await POST(request("citizen-a"));
+    const body = await response.json();
+    expect({ status: response.status, error: body.error }).toEqual({ status: expectedStatus, error: expectedError });
+    expect(JSON.stringify(body)).not.toContain(code);
+  });
+
+  it("rejeita resposta estruturada malformada sem persistir mensagem", async () => {
+    getCase.mockResolvedValue(caseSnapshot({ citizenId: "citizen-a", originalStory: "Teste", status: "TRIAGEM" }));
+    parseAi.mockResolvedValueOnce({ choices: [{ message: { parsed: null } }] });
+    const { POST } = await import("@/app/api/chat/jurisbot/route");
+    const response = await POST(request("citizen-a"));
+    expect({ status: response.status, body: await response.json(), messageCalls: setMessage.mock.calls.length }).toEqual({
+      status: 502,
+      body: { error: "AI_INVALID_RESPONSE", message: "Não foi possível validar a resposta do JurisBot." },
+      messageCalls: 0,
+    });
+  });
 });

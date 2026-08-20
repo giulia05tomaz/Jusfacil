@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/firebase/authContext";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { UI_DEV_MODE } from "@/lib/devMode";
 
 export default function PasswordResetPage() {
   const { resetPassword } = useAuth();
@@ -54,16 +55,18 @@ export default function PasswordResetPage() {
         <div className="mb-6">
           <h2 className="text-xl font-bold text-jus-petroleum mb-1">Esqueceu sua senha?</h2>
           <p className="text-xs text-slate-600">
-            Digite seu e-mail cadastrado e enviaremos as instruções para você redefinir sua senha com segurança.
+            {UI_DEV_MODE
+              ? "Esta tela está preservada para revisão visual. Nenhum e-mail será enviado enquanto o modo DEV estiver ativo."
+              : "Digite seu e-mail cadastrado e enviaremos as instruções para você redefinir sua senha com segurança."}
           </p>
         </div>
 
         {sent ? (
           <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-center space-y-3">
             <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
-            <h3 className="text-sm font-bold text-emerald-900">E-mail de redefinição enviado!</h3>
+            <h3 className="text-sm font-bold text-emerald-900">{UI_DEV_MODE ? "Fluxo de recuperação simulado" : "E-mail de redefinição enviado!"}</h3>
             <p className="text-xs text-emerald-700">
-              Verifique sua caixa de entrada no endereço <strong>{email}</strong> para prosseguir.
+              {UI_DEV_MODE ? <>Nenhum e-mail foi enviado. Esta confirmação existe apenas para validar a interface.</> : <>Verifique sua caixa de entrada no endereço <strong>{email}</strong> para prosseguir.</>}
             </p>
             <Link
               href="/login"

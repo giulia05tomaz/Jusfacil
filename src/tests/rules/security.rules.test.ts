@@ -26,6 +26,7 @@ beforeEach(async () => {
       setDoc(doc(db, "users/lawyer-b"), { uid: "lawyer-b", role: "LAWYER", lawyerStatus: "APPROVED" }),
       setDoc(doc(db, "users/admin"), { uid: "admin", role: "ADMIN" }),
       setDoc(doc(db, "cases/JF-2026-AAAAAA"), { caseId: "JF-2026-AAAAAA", citizenId: "citizen-a", assignedLawyerId: "lawyer-a", status: "COLETANDO_EVIDENCIAS", requiresHumanReview: true }),
+      setDoc(doc(db, "cases/JF-2026-AAAAAA/updates/update-1"), { updateId: "update-1", caseId: "JF-2026-AAAAAA", createdBy: "lawyer-a", createdByRole: "LAWYER", message: "Atualização de teste", visibleToCitizen: true }),
     ]);
   });
 });
@@ -56,6 +57,47 @@ describe("Firestore isolation", () => {
   });
 });
 
+
+describe("Case updates isolation", () => {
+  const path = "cases/JF-2026-AAAAAA/updates/update-1";
+
+  it("allows the case owner and assigned approved lawyer to read updates", async () => {
+    await assertSucceeds(getDoc(doc(environment.authenticatedContext("citizen-a").firestore(), path)));
+    await assertSucceeds(getDoc(doc(environment.authenticatedContext("lawyer-a").firestore(), path)));
+  });
+
+  it("denies unrelated citizens, pending lawyers and non-assigned lawyers", async () => {
+    await assertFails(getDoc(doc(environment.authenticatedContext("citizen-b").firestore(), path)));
+    await assertFails(getDoc(doc(environment.authenticatedContext("lawyer-pending").firestore(), path)));
+    await assertFails(getDoc(doc(environment.authenticatedContext("lawyer-b").firestore(), path)));
+  });
+
+  it("denies client-side creation even for the assigned lawyer and case owner", async () => {
+    const payload = {
+      updateId: "client-update",
+      caseId: "JF-2026-AAAAAA",
+      createdBy: "lawyer-a",
+      createdByRole: "LAWYER",
+      message: "Tentativa pelo cliente",
+      visibleToCitizen: true,
+    };
+    await assertFails(setDoc(doc(environment.authenticatedContext("lawyer-a").firestore(), "cases/JF-2026-AAAAAA/updates/client-lawyer"), payload));
+    await assertFails(setDoc(doc(environment.authenticatedContext("citizen-a").firestore(), "cases/JF-2026-AAAAAA/updates/client-citizen"), { ...payload, createdBy: "citizen-a" }));
+  });
+
+  it("denies direct notification creation by a lawyer", async () => {
+    await assertFails(setDoc(doc(environment.authenticatedContext("lawyer-a").firestore(), "notifications/notif-lawyer"), {
+      notificationId: "notif-lawyer",
+      userId: "citizen-a",
+      caseId: "JF-2026-AAAAAA",
+      title: "Tentativa",
+      message: "Não deve ser permitida",
+      type: "CASE_UPDATED",
+      read: false,
+    }));
+  });
+});
+
 describe("Storage isolation", () => {
   const path = "cases/JF-2026-AAAAAA/evidences/evidence-1/teste.txt";
   const data = new Blob(["conteúdo fictício"], { type: "text/plain" });
@@ -71,6 +113,27 @@ describe("Storage isolation", () => {
     await assertFails(uploadBytes(ref(environment.authenticatedContext("citizen-b").storage(), path), data, metadata("citizen-b")));
     await assertFails(uploadBytes(ref(environment.authenticatedContext("lawyer-pending").storage(), path), data, metadata("lawyer-pending")));
     await assertFails(uploadBytes(ref(environment.authenticatedContext("lawyer-b").storage(), path), data, metadata("lawyer-b")));
+  });
+});
+
+
+describe("Profile avatar storage", () => {
+  const validImage = new Blob([new Uint8Array([1, 2, 3, 4])], { type: "image/png" });
+
+  it("allows a user to upload their own supported avatar", async () => {
+    const storage = environment.authenticatedContext("citizen-a").storage();
+    await assertSucceeds(uploadBytes(ref(storage, "profiles/citizen-a/avatar.png"), validImage, { contentType: "image/png" }));
+  });
+
+  it("denies uploading an avatar into another user's profile path", async () => {
+    const storage = environment.authenticatedContext("citizen-a").storage();
+    await assertFails(uploadBytes(ref(storage, "profiles/citizen-b/avatar.png"), validImage, { contentType: "image/png" }));
+  });
+
+  it("denies unsupported avatar content types", async () => {
+    const storage = environment.authenticatedContext("lawyer-a").storage();
+    const pdf = new Blob(["fake"], { type: "application/pdf" });
+    await assertFails(uploadBytes(ref(storage, "profiles/lawyer-a/avatar.pdf"), pdf, { contentType: "application/pdf" }));
   });
 });
 

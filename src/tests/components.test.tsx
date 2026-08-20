@@ -42,7 +42,7 @@ describe("componentes críticos", () => {
   it("mostra erro real de login e não redireciona", async () => {
     mocks.loginWithEmail.mockRejectedValue(new Error("Credenciais inválidas"));
     render(<LoginPage />);
-    fireEvent.change(screen.getByLabelText("Email ou Usuário"), { target: { value: "teste@example.com" } });
+    fireEvent.change(screen.getByLabelText("Usuário ou e-mail"), { target: { value: "teste@example.com" } });
     fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "senha-inválida" } });
     fireEvent.click(document.querySelector('button[type="submit"]')!);
     expect(await screen.findByText("Credenciais inválidas")).toBeInTheDocument();

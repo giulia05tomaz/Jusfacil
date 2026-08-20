@@ -1,5 +1,25 @@
 # JusFácil
 
+## Modo visual sem Firebase (temporário)
+
+Para trabalhar exclusivamente nas telas enquanto o Firebase não está configurado, o projeto inclui um modo visual isolado.
+
+```env
+NEXT_PUBLIC_UI_DEV_MODE=true
+```
+
+Com a variável ativa:
+
+- `/` vira um seletor de perfil de demonstração (Cidadão ou Advogado);
+- `/login` continua preservado como **login original arquivado**, mas não autentica;
+- Home, dashboards, casos, notificações, suporte, perfis, JurisBot, minutas, evidências e atualização do advogado usam dados simulados locais;
+- nenhuma chamada ao Firebase ou à OpenAI é necessária para navegar e revisar a interface;
+- uma faixa amarela identifica claramente o ambiente de desenvolvimento;
+- `Restaurar dados demo` apaga alterações locais e recria o conjunto inicial.
+
+Os dados simulados ficam somente no `localStorage` do navegador. Eles não são fallback de produção e só existem quando `NEXT_PUBLIC_UI_DEV_MODE=true`. Para retornar ao fluxo real, defina a variável como `false` e configure as variáveis Firebase/OpenAI normalmente.
+
+
 > 🚧 **PROJETO EM DESENVOLVIMENTO**
 >
 > O JusFácil está em evolução contínua. Algumas integrações, funcionalidades e validações ainda estão em andamento. Este repositório representa o estado atual de desenvolvimento do projeto e é utilizado como portfólio técnico.
@@ -7,6 +27,25 @@
 Plataforma web de auxílio à organização de demandas cíveis, evidências e minutas, com triagem conversacional assistida por inteligência artificial. O projeto explora autenticação por perfis, autorização por caso, persistência documental e respostas estruturadas de IA em uma aplicação full stack.
 
 > **Aviso jurídico:** o JusFácil é um projeto educacional e de portfólio. Ele não substitui advogado, Defensoria Pública, órgão público ou decisão judicial; não protocola ações, não garante resultados e não deve ser tratado como sistema pronto para produção.
+
+## Requisito de ambiente
+
+O projeto requer **Node.js 22 ou superior**. As versões atuais de `firebase-admin`, `openai` e outras dependências do projeto não suportam Node.js 20.13.
+
+Verifique antes de instalar:
+
+```bash
+node -v
+```
+
+O resultado deve começar com `v22` (ou superior). Com NVM:
+
+```bash
+nvm install 22
+nvm use 22
+```
+
+No Windows sem NVM, instale a versão LTS 22 do Node.js e abra um novo terminal.
 
 ## Sobre o projeto
 
@@ -46,9 +85,9 @@ Navegador
 | OpenAI API | Pendente de crédito | A chamada real alcança a API, mas o projeto retorna `credit_balance_exhausted` |
 | Structured Outputs + Zod | Implementado | Schemas e validações cobertos por testes automatizados; E2E com resposta real aguarda crédito |
 | Minutas e versionamento | Implementado | Fluxo de gerar, revisar, versionar e aprovar; validação E2E aguarda resposta real da IA |
-| Portal do advogado | Em desenvolvimento | Aprovação e atribuição explícita previstas no fluxo |
+| Portal do advogado | Implementado, em validação | Home, casos, dashboard, suporte, perfil e atualização de casos; validação E2E final ainda pendente |
 | Administração | Em desenvolvimento | Área protegida existente, ainda sem validação funcional final |
-| Testes automatizados | 25 aprovados | Unidade, API, componentes e regras de domínio |
+| Testes automatizados | Ampliados | Unidade, API, componentes, validação de avatar e regras de autorização; execução final deve ser feita após instalar as dependências |
 | Deploy público | Planejado | Este repositório ainda não representa uma versão de produção |
 
 ## Progresso
@@ -182,6 +221,7 @@ erDiagram
 - Evidências com validação de nome, extensão, MIME, tamanho, upload, processamento e remoção.
 - Minutas versionadas, pedidos de alteração, aprovação transacional e geração de PDF.
 - Notificações, solicitação de revisão humana e suporte persistido.
+- Atualizações do advogado persistidas por Route Handler server-side, com autorização por caso e criação atômica de atualização + notificação ao cidadão.
 
 ## Instalação local
 
@@ -196,7 +236,7 @@ erDiagram
 ```bash
 git clone https://github.com/giulia05tomaz/Jusfacil.git
 cd Jusfacil
-npm ci
+npm install
 cp .env.example .env.local
 npm run dev
 ```
@@ -208,6 +248,8 @@ Copy-Item .env.example .env.local
 ```
 
 Abra `http://localhost:3000`.
+
+> O snapshot atual inclui `bun.lock`, mas não traz `package-lock.json`. Em um ambiente com acesso ao registry do npm, execute `npm install` uma vez e versione o `package-lock.json` gerado antes de adotar `npm ci` no pipeline.
 
 ## Variáveis de ambiente
 

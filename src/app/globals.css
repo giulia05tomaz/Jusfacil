@@ -1,21 +1,117 @@
 @import "tailwindcss";
 
+@theme {
+  --color-jus-petroleum: #002B43;
+  --color-jus-petroleum-hover: #003A58;
+  --color-jus-petroleum-active: #001F31;
+  --color-jus-petroleum-dark: #001F31;
+  --color-jus-petroleum-light: #00476E;
+  --color-jus-petroleum-50: #F0F5FA;
+  --color-jus-petroleum-100: #E6EFFA;
+  --color-jus-caramel: #C08A4E;
+  --color-jus-caramel-soft: #E7D6C4;
+  --color-jus-caramel-active: #91622F;
+  --color-jus-caramel-light: #D4A36B;
+  --color-jus-caramel-50: #FAF3EB;
+  --color-jus-caramel-100: #F5E7D8;
+  --color-jus-caramel-hover: #A8743A;
+  --color-jus-darkgray: #4A4A4A;
+  --color-jus-surface: #FFFFFF;
+  --color-jus-surface-muted: #ECECEC;
+  --color-jus-text: #202020;
+  --color-jus-border: #D7D7D7;
+  --color-jus-success: #2E7D32;
+  --color-jus-success-soft: #E5F4E7;
+  --color-jus-danger: #B3261E;
+  --color-jus-danger-soft: #FBE9E7;
+  --color-jus-info: #126B9C;
+  --color-jus-canvas: #F1F1F1;
+  --color-jus-text-muted: #6E7580;
+
+  --color-jf-primary: #002B43;
+  --color-jf-primary-hover: #003A58;
+  --color-jf-primary-active: #001F31;
+  --color-jf-caramel: #C08A4E;
+  --color-jf-caramel-soft: #E7D6C4;
+  --color-jf-caramel-hover: #A8743A;
+  --color-jf-page-bg: #F1F1F1;
+  --color-jf-surface: #FFFFFF;
+  --color-jf-surface-muted: #ECECEC;
+  --color-jf-text: #202020;
+  --color-jf-text-muted: #6E7580;
+  --color-jf-border: #D7D7D7;
+  --color-jf-success: #2E7D32;
+  --color-jf-success-soft: #E5F4E7;
+  --color-jf-danger: #B3261E;
+  --color-jf-danger-soft: #FBE9E7;
+  --color-jf-info: #126B9C;
+
+  --radius-card: 18px;
+  --radius-btn: 14px;
+  --shadow-card: 0 4px 10px rgba(0, 0, 0, 0.08);
+  --shadow-card-lg: 0 6px 18px rgba(0, 0, 0, 0.12);
+  --shadow-card-elevated: 0 10px 25px -3px rgba(0, 43, 67, 0.12);
+}
+
 @layer base {
   :root {
+    --jf-primary: #002B43;
+    --jf-primary-hover: #003A58;
+    --jf-primary-active: #001F31;
+
+    --jf-caramel: #C08A4E;
+    --jf-caramel-soft: #E7D6C4;
+    --jf-caramel-hover: #A8743A;
+
+    --jf-page-bg: #F1F1F1;
+    --jf-surface: #FFFFFF;
+    --jf-surface-muted: #ECECEC;
+
+    --jf-text: #202020;
+    --jf-text-muted: #6E7580;
+    --jf-border: #D7D7D7;
+
+    --jf-success: #2E7D32;
+    --jf-success-soft: #E5F4E7;
+
+    --jf-danger: #B3261E;
+    --jf-danger-soft: #FBE9E7;
+
+    --jf-info: #126B9C;
+
     --jus-petroleum: #002B43;
     --jus-caramel: #C08A4E;
     --jus-darkgray: #4A4A4A;
-    --jus-canvas: #F8FAFC;
+    --jus-canvas: #F1F1F1;
   }
 
   body {
-    background-color: var(--jus-canvas);
-    color: #1E293B;
+    background-color: var(--jf-page-bg);
+    color: var(--jf-text);
     font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100dvh;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  html {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  main, section, article, aside, nav, header, footer, div, form {
+    min-width: 0;
   }
 
   h1, h2, h3, .font-serif-brand {
     font-family: "Playfair Display", "Georgia", serif;
+  }
+}
+
+@layer utilities {
+  .safe-area-bottom {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
   }
 }
 
