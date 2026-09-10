@@ -11,130 +11,98 @@ export const MobileNav: React.FC = () => {
   const pathname = rawPathname || "";
   const { profile } = useAuth();
 
-  if (pathname.startsWith("/app/jurisbot") || pathname === "/advogado/suporte") return null;
-
   const isLawyer = profile?.role === "LAWYER";
 
   if (isLawyer) {
-    const isHome = pathname === "/advogado" || pathname === "/advogado/casos";
-    const isDashboard = pathname === "/advogado/dashboard";
-    const isSupport = pathname === "/advogado/suporte";
-    const isProfile = pathname === "/advogado/perfil";
-
     return (
-      <nav
-        aria-label="Navegação móvel do advogado"
-        className="safe-area-bottom md:hidden fixed bottom-0 left-0 right-0 z-40 grid w-full max-w-full grid-cols-4 items-center border-t border-slate-200/90 bg-white px-1 pt-2 shadow-card-lg"
-      >
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-lg px-2 py-1.5 flex justify-around items-center">
         <Link
-          href="/advogado"
-          className={`flex min-w-0 flex-col items-center justify-center rounded-2xl px-1 py-1 transition-all ${
-            isHome
-              ? "text-jus-petroleum font-bold scale-105"
-              : "text-jus-darkgray hover:text-jus-petroleum font-normal"
+          href="/advogado/casos"
+          className={`flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${
+            pathname === "/advogado/casos" ? "text-jus-petroleum font-bold" : "text-slate-600 hover:text-jus-petroleum"
           }`}
         >
-          <Home className={`w-5 h-5 ${isHome ? "stroke-[2.5px]" : "stroke-[1.75px]"}`} />
-          <span className="text-[11px] mt-1">Home</span>
+          <Home className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Home</span>
         </Link>
 
         <Link
-          href="/advogado/dashboard"
-          className={`flex min-w-0 flex-col items-center justify-center rounded-2xl px-1 py-1 transition-all ${
-            isDashboard
-              ? "text-jus-petroleum font-bold scale-105"
-              : "text-jus-darkgray hover:text-jus-petroleum font-normal"
+          href="/advogado/atualizacoes"
+          className={`flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${
+            pathname === "/advogado/atualizacoes" ? "text-jus-petroleum font-bold" : "text-slate-600 hover:text-jus-petroleum"
           }`}
         >
-          <LayoutDashboard className={`w-5 h-5 ${isDashboard ? "stroke-[2.5px]" : "stroke-[1.75px]"}`} />
-          <span className="text-[11px] mt-1">Dashboard</span>
+          <LayoutDashboard className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Dashboard</span>
         </Link>
 
         <Link
-          href="/advogado/suporte"
-          className={`flex min-w-0 flex-col items-center justify-center rounded-2xl px-1 py-1 transition-all ${
-            isSupport
-              ? "text-jus-petroleum font-bold scale-105"
-              : "text-jus-darkgray hover:text-jus-petroleum font-normal"
+          href="/app/suporte"
+          className={`flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${
+            pathname === "/app/suporte" ? "text-jus-petroleum font-bold" : "text-slate-600 hover:text-jus-petroleum"
           }`}
         >
-          <Headphones className={`w-5 h-5 ${isSupport ? "stroke-[2.5px]" : "stroke-[1.75px]"}`} />
-          <span className="text-[11px] mt-1">Suporte</span>
+          <Headphones className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Support</span>
         </Link>
 
         <Link
           href="/advogado/perfil"
-          className={`flex min-w-0 flex-col items-center justify-center rounded-2xl px-1 py-1 transition-all ${
-            isProfile
-              ? "text-jus-petroleum font-bold scale-105"
-              : "text-jus-darkgray hover:text-jus-petroleum font-normal"
+          className={`flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${
+            pathname === "/advogado/perfil" ? "text-jus-petroleum font-bold" : "text-slate-600 hover:text-jus-petroleum"
           }`}
         >
-          <User className={`w-5 h-5 ${isProfile ? "stroke-[2.5px]" : "stroke-[1.75px]"}`} />
-          <span className="text-[11px] mt-1">Perfil</span>
+          <User className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Perfil</span>
         </Link>
       </nav>
     );
   }
 
-  const isHome = pathname === "/app";
-  const isDashboard = pathname === "/app/dashboard";
-  const isChatBot = pathname.startsWith("/app/jurisbot") || pathname === "/app/processos/novo";
-  const isProfile = pathname === "/app/perfil";
-
   return (
-    <nav
-      aria-label="Navegação móvel do cidadão"
-      className="safe-area-bottom md:hidden fixed bottom-0 left-0 right-0 z-40 grid w-full max-w-full grid-cols-4 items-center border-t border-slate-200/90 bg-white px-1 pt-2 shadow-card-lg"
-    >
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-lg px-2 py-1.5 flex justify-around items-center">
       <Link
         href="/app"
-        className={`flex min-w-0 flex-col items-center justify-center rounded-2xl px-1 py-1 transition-all ${
-          isHome
-            ? "text-jus-petroleum font-bold scale-105"
-            : "text-jus-darkgray hover:text-jus-petroleum font-normal"
+        className={`flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${
+          pathname === "/app" ? "text-jus-petroleum font-bold" : "text-slate-600 hover:text-jus-petroleum"
         }`}
       >
-        <Home className={`w-5 h-5 ${isHome ? "stroke-[2.5px]" : "stroke-[1.75px]"}`} />
-        <span className="text-[11px] mt-1">Home</span>
+        <Home className="w-5 h-5" />
+        <span className="text-[10px] mt-0.5">Home</span>
       </Link>
 
       <Link
-        href="/app/dashboard"
-        className={`flex min-w-0 flex-col items-center justify-center rounded-2xl px-1 py-1 transition-all ${
-          isDashboard
-            ? "text-jus-petroleum font-bold scale-105"
-            : "text-jus-darkgray hover:text-jus-petroleum font-normal"
+        href="/app/processos"
+        className={`flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${
+          pathname === "/app/processos" ? "text-jus-petroleum font-bold" : "text-slate-600 hover:text-jus-petroleum"
         }`}
       >
-        <LayoutDashboard className={`w-5 h-5 ${isDashboard ? "stroke-[2.5px]" : "stroke-[1.75px]"}`} />
-        <span className="text-[11px] mt-1">Dashboard</span>
+        <LayoutDashboard className="w-5 h-5" />
+        <span className="text-[10px] mt-0.5">Dashboard</span>
       </Link>
 
       <Link
-        href="/app/jurisbot"
-        className={`flex min-w-0 flex-col items-center justify-center rounded-2xl px-1 py-1 transition-all ${
-          isChatBot
-            ? "text-jus-caramel font-bold scale-105"
-            : "text-jus-darkgray hover:text-jus-petroleum font-normal"
+        href="/app/processos/novo"
+        className={`flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${
+          pathname.includes("/jurisbot") || pathname === "/app/processos/novo"
+            ? "text-jus-caramel-contrast font-bold"
+            : "text-slate-600 hover:text-jus-petroleum"
         }`}
       >
-        <div className="w-7 h-7 rounded-full bg-jus-petroleum text-white flex items-center justify-center shadow-sm">
+        <div className="w-6 h-6 rounded-full bg-jus-petroleum text-white flex items-center justify-center -mt-1 shadow">
           <Bot className="w-4 h-4" />
         </div>
-        <span className="text-[11px] mt-1">Chat Bot</span>
+        <span className="text-[10px] mt-0.5">Chat Bot</span>
       </Link>
 
       <Link
         href="/app/perfil"
-        className={`flex min-w-0 flex-col items-center justify-center rounded-2xl px-1 py-1 transition-all ${
-          isProfile
-            ? "text-jus-petroleum font-bold scale-105"
-            : "text-jus-darkgray hover:text-jus-petroleum font-normal"
+        className={`flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${
+          pathname === "/app/perfil" ? "text-jus-petroleum font-bold" : "text-slate-600 hover:text-jus-petroleum"
         }`}
       >
-        <User className={`w-5 h-5 ${isProfile ? "stroke-[2.5px]" : "stroke-[1.75px]"}`} />
-        <span className="text-[11px] mt-1">Perfil</span>
+        <User className="w-5 h-5" />
+        <span className="text-[10px] mt-0.5">Perfil</span>
       </Link>
     </nav>
   );

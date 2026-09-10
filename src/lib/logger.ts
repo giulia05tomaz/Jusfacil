@@ -1,4 +1,4 @@
-type LogContext = Record<string, string | number | boolean | undefined>;
+type LogContext = Record<string, string | number | boolean | null | undefined>;
 
 function safeContext(context?: LogContext) {
   return context ? Object.fromEntries(Object.entries(context).filter(([, value]) => value !== undefined)) : undefined;

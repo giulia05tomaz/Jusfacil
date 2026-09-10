@@ -7,18 +7,15 @@ import { useAuth } from "@/lib/firebase/authContext";
 import { Navbar } from "@/components/layout/Navbar";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { Loader2 } from "lucide-react";
-import { DevModeBanner } from "@/components/dev/DevModeBanner";
-import { UI_DEV_MODE } from "@/lib/devMode";
 
 export default function LawyerLayout({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const immersiveSupport = pathname === "/advogado/suporte";
 
   useEffect(() => {
     if (!loading && (!user || !profile)) {
-      router.push(UI_DEV_MODE ? "/" : "/login");
+      router.push("/login");
     } else if (!loading && profile?.role !== "LAWYER") {
       router.push(profile?.role === "ADMIN" ? "/admin" : "/app");
     }
@@ -33,55 +30,15 @@ export default function LawyerLayout({ children }: { children: React.ReactNode }
     );
   }
 
-  if (profile?.role === "LAWYER" && profile.lawyerStatus !== "APPROVED" && pathname !== "/advogado/perfil" && pathname !== "/advogado") {
-    const isPending = profile.lawyerStatus === "PENDING";
-    const isSuspended = profile.lawyerStatus === "SUSPENDED";
-    const title = isPending
-      ? "Seu cadastro profissional está em análise."
-      : isSuspended
-      ? "Seu acesso profissional está suspenso."
-      : "Seu cadastro profissional não foi aprovado.";
-    const subtitle = isPending
-      ? "Você poderá visualizar casos após a aprovação do seu cadastro."
-      : "Entre em contato com o suporte ou aguarde atualização cadastral.";
-
-    return (
-      <div className="min-h-screen w-full min-w-0 max-w-full bg-[#F1F1F1] flex flex-col pb-24 md:pb-0">
-        <div className="hidden lg:block">
-          <Navbar />
-        </div>
-        <main className="flex-1 min-w-0 flex items-center justify-center p-4 sm:p-6">
-          <div className="max-w-md w-full rounded-[18px] bg-white p-8 text-center shadow-card border border-slate-100 space-y-4">
-            <h1 className="text-xl font-bold text-[#002B43]">{title}</h1>
-            <p className="text-sm text-[#6E7580] leading-relaxed">{subtitle}</p>
-            <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
-              <Link
-                href="/advogado/perfil"
-                className="inline-flex items-center justify-center rounded-[14px] bg-[#002B43] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#003A58] transition-colors"
-              >
-                Ver meu perfil
-              </Link>
-              <Link
-                href="/advogado"
-                className="inline-flex items-center justify-center rounded-[14px] bg-slate-100 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-colors"
-              >
-                Voltar à Home
-              </Link>
-            </div>
-          </div>
-        </main>
-        <MobileNav />
-      </div>
-    );
+  if (profile?.role === "LAWYER" && profile.lawyerStatus !== "APPROVED" && pathname !== "/advogado/perfil") {
+    const label = profile.lawyerStatus === "PENDING" ? "Cadastro em análise" : profile.lawyerStatus === "SUSPENDED" ? "Acesso suspenso" : "Cadastro não aprovado";
+    return <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6"><div className="max-w-lg rounded-2xl border border-amber-200 bg-white p-8 text-center shadow-sm"><h1 className="text-xl font-bold text-jus-petroleum">{label}</h1><p className="mt-3 text-sm text-slate-600">Enquanto seu status não for aprovado, casos, mensagens, evidências e minutas permanecem bloqueados.</p><Link href="/advogado/perfil" className="mt-5 inline-block rounded-xl bg-jus-petroleum px-4 py-2 text-sm font-semibold text-white">Ver meu perfil e status</Link></div></div>;
   }
 
   return (
-    <div className={`${immersiveSupport ? "h-dvh overflow-hidden pb-0" : "min-h-screen pb-24 md:pb-0"} w-full min-w-0 max-w-full bg-[#F1F1F1] flex flex-col`}>
-      <div className="hidden lg:block">
-        <Navbar />
-      </div>
-      <DevModeBanner />
-      <main className="flex-1 min-h-0 min-w-0 max-w-[1180px] w-full mx-auto p-4 sm:p-6 lg:p-8">{children}</main>
+    <div className="min-h-screen bg-slate-50 flex flex-col pb-16 md:pb-0">
+      <Navbar />
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">{children}</main>
       <MobileNav />
     </div>
   );

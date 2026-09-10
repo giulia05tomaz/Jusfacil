@@ -39,18 +39,24 @@ export type CaseStatus =
   | 'CONCLUIDO';
 
 export interface StructuredCaseData {
-  summary?: string;
-  category?: string;
-  facts?: string[];
-  timeline?: { date?: string; event: string }[];
-  involvedParties?: { name: string; role: string }[];
-  claimValue?: number;
-  userGoal?: string;
-  missingInformation?: string[];
-  evidenceNeeded?: string[];
-  confidenceLevel?: 'HIGH' | 'MEDIUM' | 'LOW';
-  requiresHumanReview?: boolean;
-  humanReviewReason?: string;
+  caseSummary: string;
+  category: string | null;
+  parties: { role: string; name: string | null; document: string | null; address: string | null; details: string | null }[];
+  facts: { description: string; date: string | null; source: string | null }[];
+  timeline: { date: string | null; event: string }[];
+  values: { description: string; amount: number | null; currency: string | null }[];
+  claimValue?: number | null;
+  evidence: { evidenceId: string | null; name: string; type: string; summary: string; relevantFacts: string[]; uncertainties: string[] }[];
+  legalIssues: string[];
+  requestedRelief: string[];
+  missingInformation: string[];
+  contradictions: string[];
+  riskFlags: string[];
+  draftReady: boolean;
+  nextQuestions: string[];
+  confidenceLevel: 'HIGH' | 'MEDIUM' | 'LOW';
+  requiresHumanReview: boolean;
+  humanReviewReason: string | null;
 }
 
 export interface LegalCase {
@@ -61,8 +67,6 @@ export interface LegalCase {
   assignedLawyerName?: string;
   title: string;
   category: string;
-  legalArea?: string;
-  courtProcessNumber?: string;
   summary: string;
   originalStory: string;
   status: CaseStatus;
@@ -70,6 +74,8 @@ export interface LegalCase {
   requiresHumanReview: boolean;
   humanReviewReason?: string;
   currentDraftVersion?: number;
+  approvedVersion?: number;
+  approvedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -106,16 +112,17 @@ export type EvidenceStatus =
   | 'FAILED';
 
 export interface EvidenceAnalysis {
+  fileName: string;
+  fileType: string;
   summary: string;
-  documentType: string;
-  dates: string[];
-  amounts: string[];
-  people: string[];
-  companies: string[];
-  protocols: string[];
   relevantFacts: string[];
-  relationToCase: string[];
+  dates: string[];
+  values: string[];
+  peopleOrOrganizations: string[];
+  protocols: string[];
+  contradictions: string[];
   uncertainties: string[];
+  relevance: string;
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
 }
 
@@ -125,7 +132,7 @@ export interface Evidence {
   originalName: string;
   mimeType: string;
   size: number;
-  storagePath: string;
+  storagePath?: string;
   status: EvidenceStatus;
   fileUrl?: string;
   description?: string;
@@ -137,6 +144,15 @@ export interface Evidence {
   confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
   processedAt?: string;
   processingError?: string;
+  originalRetained?: false;
+  order?: number;
+  reference?: string;
+  title?: string;
+  originalTitle?: string;
+  alternateFileNames?: string[];
+  sha256?: string;
+  source?: 'INDIVIDUAL' | 'ZIP';
+  processingStatus?: 'AGUARDANDO' | 'ANALISANDO' | 'CONCLUIDA' | 'ERRO';
 }
 
 export type NotificationType =
@@ -174,21 +190,4 @@ export interface CaseEligibilityResult {
   path: 'SELF_SERVICE' | 'HUMAN_REVIEW';
   reasons: string[];
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
-}
-
-export interface CaseUpdate {
-  updateId: string;
-  caseId: string;
-  createdBy: string;
-  createdByName?: string;
-  createdByRole: 'LAWYER' | 'ADMIN' | 'SYSTEM';
-  authorName?: string;
-  authorRole?: 'LAWYER' | 'ADMIN' | 'SYSTEM';
-  courtProcessNumber?: string;
-  message: string;
-  documentEvidenceId?: string;
-  documentName?: string;
-  documentUrl?: string;
-  createdAt: string;
-  visibleToCitizen: boolean;
 }

@@ -56,6 +56,8 @@ export async function POST(
       transaction.update(caseRef, {
         status: "MINUTA_APROVADA",
         currentDraftVersion: version,
+        approvedVersion: version,
+        approvedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
       transaction.set(notificationRef, {

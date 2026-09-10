@@ -7,11 +7,9 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/firebase/authContext";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Mail, Lock, User, FileText, CheckCircle2, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Mail, Lock, User, FileText, CheckCircle2, ShieldCheck } from "lucide-react";
 import { CpfSchema, OabNumberSchema, OabStateSchema, UsernameSchema } from "@/lib/validation/profile";
 import { getFriendlyError } from "@/lib/errors";
-import { UI_DEV_MODE } from "@/lib/devMode";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,14 +18,6 @@ export default function LoginPage() {
   const [activeTab, setActiveTab] = useState<"login" | "signup" | "lawyer">("login");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [showAffiliateModal, setShowAffiliateModal] = useState(false);
-
-  // Password visibility states
-  const [showLoginPassword, setShowLoginPassword] = useState(false);
-  const [showCitPassword, setShowCitPassword] = useState(false);
-  const [showCitConfirmPassword, setShowCitConfirmPassword] = useState(false);
-  const [showLawPassword, setShowLawPassword] = useState(false);
-  const [showLawConfirmPassword, setShowLawConfirmPassword] = useState(false);
 
   // Login Form State
   const [loginEmail, setLoginEmail] = useState("");
@@ -50,15 +40,14 @@ export default function LoginPage() {
   const [lawUsername, setLawUsername] = useState("");
   const [lawPass, setLawPass] = useState("");
   const [lawConfirmPass, setLawConfirmPass] = useState("");
-  const [lawyerRegisteredSuccess, setLawyerRegisteredSuccess] = useState(false);
 
   // Auto redirect if already authenticated
   React.useEffect(() => {
-    if (profile && !UI_DEV_MODE) {
+    if (profile) {
       if (profile.role === "ADMIN") {
         router.push("/admin");
       } else if (profile.role === "LAWYER") {
-        router.push("/advogado");
+        router.push("/advogado/casos");
       } else {
         router.push("/app");
       }
@@ -70,7 +59,7 @@ export default function LoginPage() {
     setErrorMsg("");
     setLoading(true);
     try {
-      await loginWithEmail(loginEmail.trim(), loginPassword);
+      await loginWithEmail(loginEmail, loginPassword);
     } catch (error: unknown) {
       setErrorMsg(getFriendlyError(error));
     } finally {
@@ -83,29 +72,19 @@ export default function LoginPage() {
     setErrorMsg("");
 
     if (citPass !== citConfirmPass) {
-      setErrorMsg("As senhas não coincidem.");
+      setErrorMsg("As senhas não coincidem!");
       return;
     }
-    if (citPass.length < 6) {
-      setErrorMsg("A senha deve ter pelo menos 6 caracteres.");
-      return;
-    }
-    if (citCpf && !CpfSchema.safeParse(citCpf).success) {
-      setErrorMsg("CPF inválido.");
-      return;
-    }
-    if (citUsername && !UsernameSchema.safeParse(citUsername).success) {
-      setErrorMsg("Nome de usuário inválido (use apenas letras, números e ponto).");
-      return;
-    }
+    if (citCpf && !CpfSchema.safeParse(citCpf).success) { setErrorMsg("CPF inválido."); return; }
+    if (citUsername && !UsernameSchema.safeParse(citUsername).success) { setErrorMsg("Nome de usuário inválido."); return; }
 
     setLoading(true);
     try {
       await signupCitizen({
-        fullName: citName.trim(),
-        email: citEmail.trim(),
-        username: citUsername.trim() || undefined,
-        cpf: citCpf.trim() || undefined,
+        fullName: citName,
+        email: citEmail,
+        username: citUsername,
+        cpf: citCpf,
         pass: citPass,
       });
       router.push("/app");
@@ -121,38 +100,25 @@ export default function LoginPage() {
     setErrorMsg("");
 
     if (lawPass !== lawConfirmPass) {
-      setErrorMsg("As senhas não coincidem.");
+      setErrorMsg("As senhas não coincidem!");
       return;
     }
-    if (lawPass.length < 6) {
-      setErrorMsg("A senha deve ter pelo menos 6 caracteres.");
-      return;
-    }
-    if (lawCpf && !CpfSchema.safeParse(lawCpf).success) {
-      setErrorMsg("CPF inválido.");
-      return;
-    }
-    if (lawUsername && !UsernameSchema.safeParse(lawUsername).success) {
-      setErrorMsg("Nome de usuário inválido.");
-      return;
-    }
-    if (!OabNumberSchema.safeParse(lawOab.trim()).success || !OabStateSchema.safeParse(lawOabState).success) {
-      setErrorMsg("Nº da OAB ou UF inválida.");
-      return;
-    }
+    if (lawCpf && !CpfSchema.safeParse(lawCpf).success) { setErrorMsg("CPF inválido."); return; }
+    if (lawUsername && !UsernameSchema.safeParse(lawUsername).success) { setErrorMsg("Nome de usuário inválido."); return; }
+    if (!OabNumberSchema.safeParse(lawOab).success || !OabStateSchema.safeParse(lawOabState).success) { setErrorMsg("OAB ou UF inválida."); return; }
 
     setLoading(true);
     try {
       await signupLawyer({
-        fullName: lawName.trim(),
-        email: lawEmail.trim(),
-        oabNumber: lawOab.trim(),
+        fullName: lawName,
+        email: lawEmail,
+        oabNumber: lawOab,
         oabState: lawOabState,
-        cpf: lawCpf.trim() || undefined,
-        username: lawUsername.trim() || undefined,
+        cpf: lawCpf,
+        username: lawUsername,
         pass: lawPass,
       });
-      setLawyerRegisteredSuccess(true);
+      router.push("/advogado/casos");
     } catch (error: unknown) {
       setErrorMsg(getFriendlyError(error));
     } finally {
@@ -162,176 +128,121 @@ export default function LoginPage() {
 
   const handleGoogleLogin = async () => {
     setErrorMsg("");
-    try {
-      await loginWithGoogle();
-    } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : "Não foi possível entrar com o Google.");
-    }
+    try { await loginWithGoogle(); }
+    catch (error) { setErrorMsg(error instanceof Error ? error.message : "Não foi possível entrar com o Google."); }
   };
 
   return (
-    <div
-      className="min-h-screen bg-slate-900 bg-cover bg-center flex flex-col justify-center items-center px-4 py-12 relative font-sans"
-      style={{
-        backgroundImage: `linear-gradient(rgba(0, 29, 46, 0.88), rgba(0, 43, 67, 0.92)), url('/img/bkg.jpg')`,
-      }}
-    >
-      {UI_DEV_MODE && (
-        <div className="fixed left-1/2 top-4 z-50 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-center text-xs font-medium text-amber-950 shadow-lg">
-          Login real arquivado temporariamente para o trabalho visual. <Link href="/" className="font-bold underline underline-offset-2">Voltar ao seletor DEV</Link>
-        </div>
-      )}
-      {/* Brand Card Frame Container */}
-      <div className="w-full max-w-[480px] relative pt-20">
-        {/* Floating Circular Logo overlapping top of card */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 z-10 w-36 h-36 sm:w-40 sm:h-40 rounded-full bg-white shadow-card-elevated border-4 border-white flex items-center justify-center p-3">
+    <div className="min-h-screen bg-slate-900 bg-cover bg-center flex flex-col justify-center items-center p-4 relative font-sans"
+         style={{ backgroundImage: `linear-gradient(rgba(0, 29, 46, 0.85), rgba(0, 43, 67, 0.90)), url('/img/bkg.jpg')` }}>
+
+      {/* Brand Header */}
+      <div className="mb-6 flex flex-col items-center text-center">
+        <div className="bg-white p-3 rounded-full shadow-xl border-2 border-jus-caramel mb-3">
           <Image
             src="/img/Logo.png"
             alt="JusFácil Logo"
-            width={120}
-            height={140}
+            width={72}
+            height={85}
             className="object-contain"
             priority
           />
         </div>
+        <h1 className="font-serif text-3xl font-bold tracking-wider text-white">JUSFÁCIL</h1>
+        <p className="text-xs text-jus-caramel-light font-medium tracking-widest uppercase">
+          Plataforma de Auxílio Jurídico e Inteligência Artificial
+        </p>
+      </div>
 
-        {/* Card Box */}
-        <div className="bg-white rounded-card shadow-2xl pt-24 pb-8 px-6 sm:px-10 border border-slate-100 transition-all">
-          {/* Header Title */}
-          <div className="text-center mb-6">
-            <h1 className="font-serif text-2xl sm:text-3xl font-bold text-jus-petroleum tracking-wide">
-              JUSFÁCIL
-            </h1>
-            <p className="text-xs text-jus-text-muted mt-1">
-              Justiça Simples e Acessível
-            </p>
-          </div>
-
-          {/* Navigation Mode Tabs */}
-          <div
-            id="auth-tab-selector"
-            className="flex rounded-[18px] bg-[#F1F4F8] p-1 mb-6 border border-slate-200/60 gap-1"
+      {/* Main Authentication Card */}
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 transition-all">
+        {/* Navigation Tabs */}
+        <div className="flex border-b border-slate-200 bg-slate-50/80 p-1">
+          <button
+            onClick={() => { setActiveTab("login"); setErrorMsg(""); }}
+            className={`flex-1 py-3 text-xs font-semibold rounded-2xl transition-all cursor-pointer ${
+              activeTab === "login"
+                ? "bg-jus-petroleum text-white shadow"
+                : "text-slate-600 hover:text-jus-petroleum"
+            }`}
           >
-            <button
-              id="auth-tab-entrar"
-              type="button"
-              onClick={() => {
-                setActiveTab("login");
-                setErrorMsg("");
-                setLawyerRegisteredSuccess(false);
-              }}
-              className={`flex-1 py-2.5 text-xs rounded-[14px] transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C08A4E] ${
-                activeTab === "login"
-                  ? "bg-[#002B43] text-white font-semibold shadow-sm opacity-100"
-                  : "bg-transparent text-[#002B43] font-medium opacity-100 hover:bg-[#002B43]/5"
-              }`}
-            >
-              Entrar
-            </button>
-            <button
-              id="auth-tab-cadastrar"
-              type="button"
-              onClick={() => {
-                setActiveTab("signup");
-                setErrorMsg("");
-                setLawyerRegisteredSuccess(false);
-              }}
-              className={`flex-1 py-2.5 text-xs rounded-[14px] transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C08A4E] ${
-                activeTab === "signup"
-                  ? "bg-[#002B43] text-white font-semibold shadow-sm opacity-100"
-                  : "bg-transparent text-[#002B43] font-medium opacity-100 hover:bg-[#002B43]/5"
-              }`}
-            >
-              Cadastrar
-            </button>
-            <button
-              id="auth-tab-advogado"
-              type="button"
-              onClick={() => {
-                setActiveTab("lawyer");
-                setErrorMsg("");
-                setLawyerRegisteredSuccess(false);
-              }}
-              className={`flex-1 py-2.5 text-xs rounded-[14px] transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C08A4E] ${
-                activeTab === "lawyer"
-                  ? "bg-[#002B43] text-white font-semibold shadow-sm opacity-100"
-                  : "bg-transparent text-[#002B43] font-medium opacity-100 hover:bg-[#002B43]/5"
-              }`}
-            >
-              Advogado
-            </button>
-          </div>
+            Entrar
+          </button>
+          <button
+            onClick={() => { setActiveTab("signup"); setErrorMsg(""); }}
+            className={`flex-1 py-3 text-xs font-semibold rounded-2xl transition-all cursor-pointer ${
+              activeTab === "signup"
+                ? "bg-jus-petroleum text-white shadow"
+                : "text-slate-600 hover:text-jus-petroleum"
+            }`}
+          >
+            Cadastrar
+          </button>
+          <button
+            onClick={() => { setActiveTab("lawyer"); setErrorMsg(""); }}
+            className={`flex-1 py-3 text-xs font-semibold rounded-2xl transition-all cursor-pointer ${
+              activeTab === "lawyer"
+                ? "bg-jus-petroleum text-white shadow"
+                : "text-slate-600 hover:text-jus-petroleum"
+            }`}
+          >
+            Advogado
+          </button>
+        </div>
 
-          {/* Error Message */}
+        <div className="p-6 sm:p-8">
           {errorMsg && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-start gap-2">
-              <span className="font-bold">Erro:</span>
-              <span>{errorMsg}</span>
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
+              <span className="font-bold">Erro:</span> {errorMsg}
             </div>
           )}
 
-          {/* TAB 1: LOGIN (Tela 1) */}
+          {/* TAB 1: LOGIN */}
           {activeTab === "login" && (
             <form onSubmit={handleLogin} className="space-y-4">
               <Input
-                label="Usuário ou e-mail"
+                label="Email ou Usuário"
                 type="email"
-                placeholder="seu.email@exemplo.com"
+                placeholder="@josemaria1 ou email@exemplo.com"
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
                 icon={<Mail className="w-4 h-4" />}
-                inputVariant="underline"
                 required
               />
 
               <Input
                 label="Senha"
-                type={showLoginPassword ? "text" : "password"}
-                placeholder="••••••••••••"
+                type="password"
+                placeholder="************"
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
                 icon={<Lock className="w-4 h-4" />}
-                inputVariant="underline"
-                rightElement={
-                  <button
-                    type="button"
-                    onClick={() => setShowLoginPassword(!showLoginPassword)}
-                    className="p-1 hover:text-jus-petroleum transition-colors"
-                    aria-label={showLoginPassword ? "Ocultar senha" : "Exibir senha"}
-                  >
-                    {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                }
                 required
               />
 
-              <div className="pt-2">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  fullWidth
-                  size="lg"
-                  loading={loading}
-                >
-                  Entrar
-                </Button>
-              </div>
+              <Button
+                type="submit"
+                variant="primary"
+                className="w-full py-3 mt-2 text-sm font-semibold uppercase tracking-wider"
+                loading={loading}
+              >
+                Entrar
+              </Button>
 
               <div className="relative my-4">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-200" />
+                  <div className="w-full border-t border-slate-200"></div>
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-white px-2 text-slate-400 font-medium">Ou</span>
+                  <span className="bg-white px-2 text-slate-600 font-medium">Ou continue com</span>
                 </div>
               </div>
 
               <Button
                 type="button"
                 variant="outline"
-                fullWidth
                 onClick={handleGoogleLogin}
-                className="flex items-center justify-center gap-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                className="w-full py-2.5 flex items-center justify-center gap-2 text-xs font-semibold text-slate-700 border-slate-300 hover:bg-slate-50"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24">
                   <path
@@ -354,69 +265,62 @@ export default function LoginPage() {
                 <span>Entrar com Google</span>
               </Button>
 
-              <div className="pt-4 flex flex-col items-center gap-2.5 text-xs">
-                <Link
-                  href="/recuperar-senha"
-                  className="text-jus-petroleum hover:underline font-medium"
-                >
+              <div className="pt-3 flex flex-col items-center gap-2 text-xs">
+                <Link href="/recuperar-senha" className="text-jus-petroleum hover:underline font-medium">
                   Esqueceu a senha?
                 </Link>
                 <button
                   type="button"
                   onClick={() => setActiveTab("signup")}
-                  className="text-jus-caramel hover:underline font-semibold cursor-pointer"
+                  className="text-jus-caramel-contrast hover:underline font-semibold"
                 >
                   Primeiro acesso? Cadastre-se aqui &gt;
                 </button>
               </div>
 
               <div className="mt-4 pt-3 border-t border-slate-100 text-center">
-                <button
-                  type="button"
-                  onClick={() => setShowAffiliateModal(true)}
-                  className="inline-block px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 font-semibold text-xs rounded-xl transition-colors border border-slate-200 cursor-pointer"
+                <Link
+                  href="/app/suporte"
+                  className="inline-block px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors"
                 >
                   Seja nosso afiliado
-                </button>
+                </Link>
               </div>
             </form>
           )}
 
-          {/* TAB 2: CADASTRO CIDADÃO (Tela 2) */}
+          {/* TAB 2: CADASTRO CIDADÃO */}
           {activeTab === "signup" && (
-            <form onSubmit={handleCitizenSignup} className="space-y-3.5">
+            <form onSubmit={handleCitizenSignup} className="space-y-3">
               <Input
                 label="Nome Completo"
                 type="text"
-                placeholder="Seu nome completo"
+                placeholder="José Maria dos Santos"
                 value={citName}
                 onChange={(e) => setCitName(e.target.value)}
                 icon={<User className="w-4 h-4" />}
-                inputVariant="underline"
                 required
               />
 
               <Input
-                label="E-mail"
+                label="Email"
                 type="email"
-                placeholder="seu.email@exemplo.com"
+                placeholder="josemaria@gmail.com"
                 value={citEmail}
                 onChange={(e) => setCitEmail(e.target.value)}
                 icon={<Mail className="w-4 h-4" />}
-                inputVariant="underline"
                 required
               />
 
               <Input
                 label="Nome de usuário"
                 type="text"
-                placeholder="@usuario"
+                placeholder="@josemaria1"
                 value={citUsername}
                 onChange={(e) => setCitUsername(e.target.value)}
-                inputVariant="underline"
                 rightElement={
-                  citUsername.length > 2 ? (
-                    <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+                  citUsername.length > 3 ? (
+                    <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
                       disponível
                     </span>
                   ) : undefined
@@ -424,78 +328,55 @@ export default function LoginPage() {
               />
 
               <Input
-                label="CPF (Opcional)"
+                label="CPF"
                 type="text"
                 placeholder="000.000.000-00"
                 value={citCpf}
                 onChange={(e) => setCitCpf(e.target.value)}
                 icon={<FileText className="w-4 h-4" />}
-                inputVariant="underline"
               />
 
               <Input
                 label="Criar Senha"
-                type={showCitPassword ? "text" : "password"}
-                placeholder="Mínimo de 6 caracteres"
+                type="password"
+                placeholder="************"
                 value={citPass}
                 onChange={(e) => setCitPass(e.target.value)}
                 icon={<Lock className="w-4 h-4" />}
-                inputVariant="underline"
-                rightElement={
-                  <button
-                    type="button"
-                    onClick={() => setShowCitPassword(!showCitPassword)}
-                    className="p-1 hover:text-jus-petroleum transition-colors"
-                  >
-                    {showCitPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                }
                 required
               />
 
               <Input
                 label="Confirmar Senha"
-                type={showCitConfirmPassword ? "text" : "password"}
-                placeholder="Repita sua senha"
+                type="password"
+                placeholder="************"
                 value={citConfirmPass}
                 onChange={(e) => setCitConfirmPass(e.target.value)}
                 icon={<Lock className="w-4 h-4" />}
-                inputVariant="underline"
                 rightElement={
                   citPass && citConfirmPass && citPass === citConfirmPass ? (
-                    <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> senhas iguais
+                    <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> senhas iguais
                     </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setShowCitConfirmPassword(!showCitConfirmPassword)}
-                      className="p-1 hover:text-jus-petroleum transition-colors"
-                    >
-                      {showCitConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  )
+                  ) : undefined
                 }
                 required
               />
 
-              <div className="pt-2">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  fullWidth
-                  size="lg"
-                  loading={loading}
-                >
-                  Cadastrar
-                </Button>
-              </div>
+              <Button
+                type="submit"
+                variant="primary"
+                className="w-full py-3 mt-2 text-sm font-semibold uppercase tracking-wider"
+                loading={loading}
+              >
+                Cadastrar
+              </Button>
 
               <div className="text-center pt-2">
                 <button
                   type="button"
                   onClick={() => setActiveTab("login")}
-                  className="text-xs text-jus-petroleum hover:underline font-semibold cursor-pointer"
+                  className="text-xs text-jus-petroleum hover:underline font-semibold"
                 >
                   Já possuo cadastro &gt;
                 </button>
@@ -503,198 +384,122 @@ export default function LoginPage() {
             </form>
           )}
 
-          {/* TAB 3: CADASTRO ADVOGADO (Tela 16) */}
+          {/* TAB 3: CADASTRO ADVOGADO */}
           {activeTab === "lawyer" && (
-            <div>
-              {lawyerRegisteredSuccess ? (
-                <div className="text-center py-4 space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-6 h-6" />
-                  </div>
-                  <h2 className="text-base font-bold text-jus-petroleum">
-                    Cadastro enviado para análise!
-                  </h2>
-                  <p className="text-xs text-slate-600 leading-relaxed max-w-sm mx-auto">
-                    Seu cadastro profissional foi recebido com sucesso. Você poderá acessar a plataforma e os casos após aprovação do seu perfil profissional pela administração.
-                  </p>
-                  <div className="pt-3">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => router.push("/advogado")}
-                    >
-                      Acessar Portal do Advogado
-                    </Button>
-                  </div>
+            <form onSubmit={handleLawyerSignup} className="space-y-3">
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 p-2.5 rounded-xl text-xs flex items-center gap-2 mb-1">
+                <ShieldCheck className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <span>Área de credenciamento e acesso para Advogados (OAB).</span>
+              </div>
+
+              <Input
+                label="Nome completo do Advogado"
+                type="text"
+                placeholder="Dr. José Maria dos Santos"
+                value={lawName}
+                onChange={(e) => setLawName(e.target.value)}
+                icon={<User className="w-4 h-4" />}
+                required
+              />
+
+              <Input
+                label="Email Institucional"
+                type="email"
+                placeholder="advogado@escritorio.com"
+                value={lawEmail}
+                onChange={(e) => setLawEmail(e.target.value)}
+                icon={<Mail className="w-4 h-4" />}
+                required
+              />
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2">
+                  <Input
+                    label="Nº da OAB"
+                    type="text"
+                    placeholder="123456"
+                    value={lawOab}
+                    onChange={(e) => setLawOab(e.target.value)}
+                    required
+                  />
                 </div>
-              ) : (
-                <form onSubmit={handleLawyerSignup} className="space-y-3.5">
-                  <div className="bg-amber-50 border border-amber-200 text-amber-800 p-2.5 rounded-xl text-xs flex items-center gap-2 mb-2">
-                    <ShieldCheck className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                    <span>Área de credenciamento profissional para Advogados (OAB).</span>
-                  </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 tracking-wide uppercase block mb-1.5">
+                    UF
+                  </label>
+                  <select
+                    value={lawOabState}
+                    onChange={(e) => setLawOabState(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg py-2.5 px-2 text-sm text-slate-800 focus:outline-none focus:border-jus-petroleum"
+                  >
+                    {["SP", "RJ", "MG", "RS", "PR", "SC", "BA", "PE", "CE", "GO", "DF"].map((uf) => (
+                      <option key={uf} value={uf}>{uf}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
-                  <Input
-                    label="Nome completo do Advogado"
-                    type="text"
-                    placeholder="Dr. Nome Completo"
-                    value={lawName}
-                    onChange={(e) => setLawName(e.target.value)}
-                    icon={<User className="w-4 h-4" />}
-                    inputVariant="underline"
-                    required
-                  />
+              <Input
+                label="CPF"
+                type="text"
+                placeholder="000.000.000-00"
+                value={lawCpf}
+                onChange={(e) => setLawCpf(e.target.value)}
+              />
 
-                  <Input
-                    label="E-mail Institucional"
-                    type="email"
-                    placeholder="advogado@escritorio.com"
-                    value={lawEmail}
-                    onChange={(e) => setLawEmail(e.target.value)}
-                    icon={<Mail className="w-4 h-4" />}
-                    inputVariant="underline"
-                    required
-                  />
+              <Input
+                label="Nome de usuário"
+                type="text"
+                placeholder="@advogada"
+                value={lawUsername}
+                onChange={(e) => setLawUsername(e.target.value)}
+              />
 
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="col-span-2">
-                      <Input
-                        label="Nº da OAB"
-                        type="text"
-                        placeholder="123456"
-                        value={lawOab}
-                        onChange={(e) => setLawOab(e.target.value)}
-                        inputVariant="underline"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-slate-700 tracking-wide uppercase block mb-1">
-                        UF da OAB
-                      </label>
-                      <select
-                        value={lawOabState}
-                        onChange={(e) => setLawOabState(e.target.value)}
-                        className="w-full bg-transparent border-0 border-b-2 border-slate-300 rounded-none py-2 px-1 text-sm text-slate-900 focus:outline-none focus:border-jus-petroleum"
-                      >
-                        {[
-                          "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA",
-                          "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN",
-                          "RS", "RO", "RR", "SC", "SP", "SE", "TO"
-                        ].map((uf) => (
-                          <option key={uf} value={uf}>{uf}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+              <Input
+                label="Criar Senha"
+                type="password"
+                placeholder="************"
+                value={lawPass}
+                onChange={(e) => setLawPass(e.target.value)}
+                icon={<Lock className="w-4 h-4" />}
+                required
+              />
 
-                  <Input
-                    label="CPF (Opcional)"
-                    type="text"
-                    placeholder="000.000.000-00"
-                    value={lawCpf}
-                    onChange={(e) => setLawCpf(e.target.value)}
-                    icon={<FileText className="w-4 h-4" />}
-                    inputVariant="underline"
-                  />
+              <Input
+                label="Confirmar Senha"
+                type="password"
+                placeholder="************"
+                value={lawConfirmPass}
+                onChange={(e) => setLawConfirmPass(e.target.value)}
+                icon={<Lock className="w-4 h-4" />}
+                required
+              />
 
-                  <Input
-                    label="Nome de usuário"
-                    type="text"
-                    placeholder="@advogado"
-                    value={lawUsername}
-                    onChange={(e) => setLawUsername(e.target.value)}
-                    inputVariant="underline"
-                  />
+              <Button
+                type="submit"
+                variant="primary"
+                className="w-full py-3 mt-2 text-sm font-semibold uppercase tracking-wider"
+                loading={loading}
+              >
+                Cadastrar Advogado
+              </Button>
 
-                  <Input
-                    label="Criar Senha"
-                    type={showLawPassword ? "text" : "password"}
-                    placeholder="Mínimo de 6 caracteres"
-                    value={lawPass}
-                    onChange={(e) => setLawPass(e.target.value)}
-                    icon={<Lock className="w-4 h-4" />}
-                    inputVariant="underline"
-                    rightElement={
-                      <button
-                        type="button"
-                        onClick={() => setShowLawPassword(!showLawPassword)}
-                        className="p-1 hover:text-jus-petroleum transition-colors"
-                      >
-                        {showLawPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    }
-                    required
-                  />
-
-                  <Input
-                    label="Confirmar Senha"
-                    type={showLawConfirmPassword ? "text" : "password"}
-                    placeholder="Repita sua senha"
-                    value={lawConfirmPass}
-                    onChange={(e) => setLawConfirmPass(e.target.value)}
-                    icon={<Lock className="w-4 h-4" />}
-                    inputVariant="underline"
-                    rightElement={
-                      lawPass && lawConfirmPass && lawPass === lawConfirmPass ? (
-                        <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> senhas iguais
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setShowLawConfirmPassword(!showLawConfirmPassword)}
-                          className="p-1 hover:text-jus-petroleum transition-colors"
-                        >
-                          {showLawConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      )
-                    }
-                    required
-                  />
-
-                  <div className="pt-2">
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      fullWidth
-                      size="lg"
-                      loading={loading}
-                    >
-                      Cadastrar Advogado
-                    </Button>
-                  </div>
-
-                  <div className="text-center pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab("login")}
-                      className="text-xs text-jus-petroleum hover:underline font-semibold cursor-pointer"
-                    >
-                      Já possuo cadastro &gt;
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("login")}
+                  className="text-xs text-jus-petroleum hover:underline font-semibold"
+                >
+                  Já possuo cadastro &gt;
+                </button>
+              </div>
+            </form>
           )}
         </div>
       </div>
 
-      {/* Affiliate Modal */}
-      <ConfirmDialog
-        isOpen={showAffiliateModal}
-        onClose={() => setShowAffiliateModal(false)}
-        onConfirm={() => setShowAffiliateModal(false)}
-        title="Programa de Afiliados"
-        description="O programa de parceiros e afiliados do JusFácil está em fase de estruturação e estará disponível em breve. Fique atento às próximas novidades!"
-        confirmText="Entendi"
-        cancelText="Fechar"
-        variant="primary"
-      />
-
-      <p className="mt-8 text-xs text-slate-300 text-center font-medium">
-        JusFácil © 2026 — Justiça Simples e Acessível
+      <p className="mt-6 text-xs text-slate-300 font-medium">
+        JusFácil © 2026 — Desenvolvido com inteligência artificial para a democratização da Justiça.
       </p>
     </div>
   );

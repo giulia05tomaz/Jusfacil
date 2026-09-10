@@ -1,6 +1,5 @@
 {
   "name": "JusFácil - Assistente Jurídico",
   "description": "Plataforma de auxílio jurídico com Inteligência Artificial para o cidadão em pequenas causas (Juizados Especiais Cíveis).",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "requestFramePermissions": []
 }

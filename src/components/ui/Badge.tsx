@@ -22,7 +22,7 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, children }) => {
         return { label: "Gerando Minuta", style: "bg-indigo-50 text-indigo-700 border-indigo-200" };
       case "AGUARDANDO_REVISAO":
       case "AJUSTANDO_MINUTA":
-        return { label: "Aguardando Revisão", style: "bg-jus-caramel-50 text-jus-caramel border-jus-caramel-light" };
+        return { label: "Aguardando Revisão", style: "bg-jus-caramel-50 text-jus-caramel-contrast border-jus-caramel-light" };
       case "MINUTA_APROVADA":
       case "PRONTO_PARA_PROTOCOLO":
         return { label: "Minuta Aprovada", style: "bg-emerald-50 text-emerald-700 border-emerald-200" };

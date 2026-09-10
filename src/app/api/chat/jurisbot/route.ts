@@ -1,155 +1,75 @@
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
-import { zodResponseFormat } from "openai/helpers/zod";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
+import { zodTextFormat } from "openai/helpers/zod";
 import { JURISBOT_SYSTEM_PROMPT } from "@/lib/ai/prompts";
 import { JurisBotRequestSchema, JurisBotResponseSchema } from "@/lib/ai/schemas";
+import { createOpenAIClient, estimateLunaCost, OPENAI_CHAT_MODEL, safeOpenAIError } from "@/lib/ai/openai";
 import { evaluateCaseEligibility } from "@/lib/cases/eligibility";
+import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { logger } from "@/lib/logger";
-import type { LegalCase, StructuredCaseData, UserProfile } from "@/types";
 import { isAuthorizedForCase } from "@/lib/security/caseAuthorization";
+import { checkChatRateLimit } from "@/lib/security/inMemoryRateLimit";
+import type { LegalCase, StructuredCaseData, UserProfile } from "@/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const rateBuckets = new Map<string, { count: number; resetAt: number }>();
-
-function omitNullValues<T>(value: T): T {
-  if (Array.isArray(value)) return value.map(omitNullValues) as T;
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .filter(([, item]) => item !== null)
-        .map(([key, item]) => [key, omitNullValues(item)]),
-    ) as T;
-  }
-  return value;
-}
-
-export function checkRateLimit(uid: string, now = Date.now()): { allowed: boolean; retryAfter: number } {
-  const max = Number(process.env.JURISBOT_RATE_LIMIT_MAX || 12);
-  const windowMs = Number(process.env.JURISBOT_RATE_LIMIT_WINDOW_MS || 60_000);
-  const current = rateBuckets.get(uid);
-  if (!current || current.resetAt <= now) {
-    rateBuckets.set(uid, { count: 1, resetAt: now + windowMs });
-    return { allowed: true, retryAfter: 0 };
-  }
-  if (current.count >= max) return { allowed: false, retryAfter: Math.ceil((current.resetAt - now) / 1000) };
-  current.count += 1;
-  return { allowed: true, retryAfter: 0 };
-}
 
 function errorResponse(error: string, message: string, status: number, headers?: HeadersInit) {
   return NextResponse.json({ error, message }, { status, headers });
 }
 
-type OpenAIErrorLike = {
-  status?: number;
-  code?: string;
-  error?: { code?: string };
-  name?: string;
-  request_id?: string;
-  requestId?: string;
-};
-
-export function classifyOpenAIError(error: unknown) {
-  const apiError = error as OpenAIErrorLike;
-  const upstreamStatus = apiError.status;
-  const upstreamCode = apiError.code || apiError.error?.code;
-  const requestId = apiError.request_id || apiError.requestId;
-  const errorType = error instanceof Error ? error.name : apiError.name || "unknown";
-
-  if (upstreamStatus === 401) {
-    return {
-      error: "AI_AUTHENTICATION_FAILED",
-      message: "O JurisBot está temporariamente indisponível. Tente novamente mais tarde.",
-      status: 503,
-      upstreamStatus,
-      upstreamCode,
-      requestId,
-      errorType,
-    };
-  }
-  if (upstreamStatus === 429) {
-    return {
-      error: "AI_QUOTA_EXCEEDED",
-      message: "O JurisBot está temporariamente indisponível para gerar uma resposta. Tente novamente mais tarde.",
-      status: 503,
-      upstreamStatus,
-      upstreamCode,
-      requestId,
-      errorType,
-    };
-  }
-  if (upstreamStatus === 400) {
-    return {
-      error: "AI_INVALID_REQUEST",
-      message: "Não foi possível processar esta solicitação. Revise a mensagem e tente novamente.",
-      status: 502,
-      upstreamStatus,
-      upstreamCode,
-      requestId,
-      errorType,
-    };
-  }
-  if (upstreamStatus && upstreamStatus >= 500) {
-    return {
-      error: "AI_UPSTREAM_ERROR",
-      message: "O JurisBot está temporariamente indisponível. Tente novamente mais tarde.",
-      status: 503,
-      upstreamStatus,
-      upstreamCode,
-      requestId,
-      errorType,
-    };
-  }
-  if (["APIConnectionError", "APIConnectionTimeoutError"].includes(errorType)
-    || ["ECONNRESET", "ETIMEDOUT"].includes(upstreamCode || "")) {
-    return {
-      error: "AI_NETWORK_ERROR",
-      message: "Não foi possível conectar ao JurisBot. Tente novamente mais tarde.",
-      status: 503,
-      upstreamStatus,
-      upstreamCode,
-      requestId,
-      errorType,
-    };
-  }
+function mergeStructuredData(previous: StructuredCaseData | null | undefined, next: StructuredCaseData): StructuredCaseData {
+  if (!previous) return next;
+  const mergeArrays = <T,>(left: T[], right: T[]) => {
+    const seen = new Set<string>();
+    return [...left, ...right].filter((item) => {
+      const key = JSON.stringify(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
   return {
-    error: "AI_UNAVAILABLE",
-    message: "O JurisBot está temporariamente indisponível. Tente novamente mais tarde.",
-    status: 503,
-    upstreamStatus,
-    upstreamCode,
-    requestId,
-    errorType,
+    ...next,
+    caseSummary: next.caseSummary.trim() || previous.caseSummary,
+    category: next.category ?? previous.category,
+    parties: mergeArrays(previous.parties, next.parties),
+    facts: mergeArrays(previous.facts, next.facts),
+    timeline: mergeArrays(previous.timeline, next.timeline),
+    values: mergeArrays(previous.values, next.values),
+    evidence: mergeArrays(previous.evidence, next.evidence),
+    legalIssues: mergeArrays(previous.legalIssues, next.legalIssues),
+    requestedRelief: mergeArrays(previous.requestedRelief, next.requestedRelief),
+    contradictions: mergeArrays(previous.contradictions, next.contradictions),
+    riskFlags: mergeArrays(previous.riskFlags, next.riskFlags),
+    draftReady: previous.draftReady || next.draftReady,
+    requiresHumanReview: previous.requiresHumanReview || next.requiresHumanReview,
   };
 }
 
 export async function POST(request: Request) {
+  const startedAt = Date.now();
   const authHeader = request.headers.get("authorization");
   if (!authHeader?.startsWith("Bearer ")) return errorResponse("AUTH_REQUIRED", "Faça login para continuar.", 401);
 
   let uid: string;
   try {
-    const decoded = await getAdminAuth().verifyIdToken(authHeader.slice(7));
-    uid = decoded.uid;
-  } catch {
+    const token = authHeader.slice(7).trim();
+    if (token.split(".").length !== 3) throw Object.assign(new Error("Malformed Firebase token"), { code: "auth/argument-error" });
+    uid = (await getAdminAuth().verifyIdToken(token)).uid;
+  } catch (error) {
+    const authError = error as { code?: string };
+    const token = authHeader.slice(7).trim();
+    logger.warn("firebase_token_verification_failed", { errorType: error instanceof Error ? error.name : "unknown", upstreamCode: authError.code, tokenLength: token.length, tokenSegments: token.split(".").length });
     return errorResponse("AUTH_REQUIRED", "Sessão inválida ou expirada. Faça login novamente.", 401);
   }
 
   let rawBody: unknown;
-  try {
-    rawBody = await request.json();
-  } catch {
-    return errorResponse("VALIDATION_ERROR", "O corpo da requisição deve ser JSON válido.", 400);
-  }
+  try { rawBody = await request.json(); } catch { return errorResponse("VALIDATION_ERROR", "O corpo da requisição deve ser JSON válido.", 400); }
   const parsed = JurisBotRequestSchema.safeParse(rawBody);
   if (!parsed.success) return errorResponse("VALIDATION_ERROR", "A mensagem enviada excede os limites ou contém dados inválidos.", 400);
 
-  const rate = checkRateLimit(uid);
-  if (!rate.allowed) return errorResponse("RATE_LIMITED", "Muitas mensagens em pouco tempo. Aguarde antes de tentar novamente.", 429, { "Retry-After": String(rate.retryAfter) });
-
+  let responseMessageRef: FirebaseFirestore.DocumentReference | undefined;
+  let reservationCreated = false;
   try {
     const adminDb = getAdminDb();
     const [caseSnapshot, userSnapshot] = await Promise.all([
@@ -162,104 +82,162 @@ export async function POST(request: Request) {
     const legalCase = caseSnapshot.data() as LegalCase;
     const user = userSnapshot.data() as UserProfile;
     if (!isAuthorizedForCase(uid, user, legalCase)) return errorResponse("FORBIDDEN", "Você não tem acesso a este caso.", 403);
+    responseMessageRef = caseSnapshot.ref.collection("messages").doc(`ai_${parsed.data.clientMessageId}`);
+    const priorResponse = await responseMessageRef.get();
+    if (priorResponse.exists) {
+      const saved = priorResponse.data() as { content?: string; structuredData?: StructuredCaseData; processingState?: string };
+      if (saved.processingState === "COMPLETED" || saved.content) {
+        return NextResponse.json({ reply: saved.content, structuredData: saved.structuredData ?? legalCase.structuredData ?? null, idempotent: true });
+      }
+      return errorResponse("REQUEST_ALREADY_RECEIVED", "Esta mensagem já está sendo processada ou já falhou. Envie uma nova mensagem para tentar novamente.", 409);
+    }
+    if (!process.env.OPENAI_API_KEY) return errorResponse("AI_UNAVAILABLE", "O JurisBot está temporariamente indisponível.", 503);
 
-    if (!process.env.OPENAI_API_KEY) return errorResponse("AI_UNAVAILABLE", "O JurisBot está temporariamente indisponível. Tente novamente.", 503);
+    const rate = checkChatRateLimit(uid);
+    if (!rate.allowed) return errorResponse("RATE_LIMITED", "Você enviou muitas mensagens em pouco tempo. Aguarde alguns segundos.", 429, { "Retry-After": String(rate.retryAfter) });
 
-    const [evidenceSnapshot, draftSnapshot] = await Promise.all([
-      caseSnapshot.ref.collection("evidences").where("status", "==", "PROCESSED").limit(12).get(),
-      caseSnapshot.ref.collection("drafts").orderBy("version", "desc").limit(1).get(),
+    const userMessageRef = caseSnapshot.ref.collection("messages").doc(parsed.data.clientMessageId);
+    const reservedAt = new Date();
+    reservationCreated = await adminDb.runTransaction(async (transaction) => {
+      const existingReservation = await transaction.get(responseMessageRef!);
+      if (existingReservation.exists) return false;
+      transaction.set(userMessageRef, {
+        messageId: parsed.data.clientMessageId,
+        clientMessageId: parsed.data.clientMessageId,
+        caseId: parsed.data.caseId,
+        sender: "USER",
+        senderName: user.fullName || "Usuário",
+        content: parsed.data.message,
+        timestamp: reservedAt,
+      });
+      transaction.set(responseMessageRef!, {
+        messageId: responseMessageRef!.id,
+        clientMessageId: parsed.data.clientMessageId,
+        caseId: parsed.data.caseId,
+        sender: "SYSTEM",
+        senderName: "JurisBot",
+        content: "",
+        hidden: true,
+        processingState: "PROCESSING",
+        timestamp: reservedAt,
+      });
+      return true;
+    });
+    if (!reservationCreated) {
+      const concurrent = await responseMessageRef.get();
+      const saved = concurrent.data() as { content?: string; structuredData?: StructuredCaseData; processingState?: string } | undefined;
+      if (saved?.processingState === "COMPLETED" || saved?.content) {
+        return NextResponse.json({ reply: saved.content, structuredData: saved.structuredData ?? legalCase.structuredData ?? null, idempotent: true });
+      }
+      return errorResponse("REQUEST_ALREADY_RECEIVED", "Esta mensagem já está sendo processada.", 409);
+    }
+
+    const [evidenceSnapshot, messageSnapshot] = await Promise.all([
+      caseSnapshot.ref.collection("evidences").where("status", "==", "PROCESSED").get(),
+      caseSnapshot.ref.collection("messages").orderBy("timestamp", "desc").limit(20).get(),
     ]);
     const evidenceContext = evidenceSnapshot.docs.map((item) => {
       const data = item.data();
-      return { evidenceId: item.id, originalName: data.originalName, analysis: data.analysis, extractedText: String(data.extractedText || "").slice(0, 4_000) };
-    });
+      return { evidenceId: item.id, order: data.order ?? null, reference: data.reference ?? null, title: data.title ?? data.originalName, summary: data.analysis?.summary || String(data.extractedText || "").slice(0, 400), relevantFacts: data.analysis?.relevantFacts?.slice?.(0, 5) || [] };
+    }).sort((a, b) => Number(a.order ?? 9999) - Number(b.order ?? 9999));
     const context = JSON.stringify({
       caseId: parsed.data.caseId,
-      summary: legalCase.summary,
-      structuredData: legalCase.structuredData,
+      originalStory: legalCase.originalStory,
+      caseSummary: legalCase.summary,
+      structuredData: legalCase.structuredData ?? null,
       evidences: evidenceContext,
-      currentDraft: draftSnapshot.empty ? null : draftSnapshot.docs[0].data(),
-    }).slice(0, 24_000);
+    }).slice(0, 22_000);
+    let remainingCharacters = 12_000;
+    const newestRelevant = messageSnapshot.docs.flatMap((item) => {
+      const data = item.data();
+      const sender = data.sender === "USER" || data.sender === "BOT" ? data.sender : null;
+      const content = String(data.content || "").trim().slice(0, 4_000);
+      if (!sender || !content || remainingCharacters <= 0) return [];
+      const boundedContent = content.slice(Math.max(0, content.length - remainingCharacters));
+      remainingCharacters -= boundedContent.length;
+      return [{ role: sender === "USER" ? "user" as const : "assistant" as const, content: boundedContent }];
+    }).slice(0, 10);
+    const input = newestRelevant.reverse();
 
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const completion = await openai.chat.completions.parse({
-      model: process.env.OPENAI_MODEL || "gpt-5-mini",
-      messages: [
-        { role: "system", content: JURISBOT_SYSTEM_PROMPT },
-        { role: "system", content: `DADOS_DO_USUARIO\n${context}\nFIM_DADOS_DO_USUARIO` },
-        ...(parsed.data.messages.length ? parsed.data.messages : [{ role: "user" as const, content: parsed.data.userStory || legalCase.originalStory }]),
+    const response = await createOpenAIClient().responses.parse({
+      model: OPENAI_CHAT_MODEL,
+      instructions: JURISBOT_SYSTEM_PROMPT,
+      input: [
+        { role: "developer", content: `DADOS_DO_USUARIO\n${context}\nFIM_DADOS_DO_USUARIO` },
+        ...input.map((message) => ({ role: message.role, content: message.content })),
       ],
-      response_format: zodResponseFormat(JurisBotResponseSchema, "jurisbot_response"),
+      text: { format: zodTextFormat(JurisBotResponseSchema, "jurisbot_response") },
+      reasoning: { effort: "low" },
+      max_output_tokens: 3_200,
+      store: false,
     });
-    const payload = completion.choices[0]?.message.parsed;
-    if (!payload) return errorResponse("AI_INVALID_RESPONSE", "Não foi possível validar a resposta do JurisBot.", 502);
-
-    if (payload.structuredData) {
-      const data = omitNullValues(payload.structuredData);
-      const eligibility = evaluateCaseEligibility(data as unknown as StructuredCaseData);
-      await adminDb.runTransaction(async (transaction) => {
-        const freshCase = await transaction.get(caseSnapshot.ref);
-        if (!freshCase.exists) throw new Error("case_deleted");
-        const current = freshCase.data() as LegalCase;
-        const caseUpdates: Record<string, unknown> = {
-          structuredData: data,
-          summary: data.summary || current.summary,
-          category: data.category || current.category,
-          requiresHumanReview: eligibility.path === "HUMAN_REVIEW",
-          humanReviewReason: eligibility.reasons.join(" ") || null,
-          updatedAt: new Date(),
-        };
-        if (eligibility.path === "HUMAN_REVIEW") caseUpdates.status = "REVISAO_HUMANA";
-        if (data.generateDraft && data.draftContent) {
-          const version = (current.currentDraftVersion || 0) + 1;
-          const draftRef = caseSnapshot.ref.collection("drafts").doc(`v${version}`);
-          transaction.set(draftRef, {
-            version,
-            caseId: parsed.data.caseId,
-            title: data.draftTitle || "Minuta informativa",
-            content: data.draftContent,
-            approved: false,
-            createdBy: uid,
-            source: "AI",
-            createdAt: new Date(),
-          });
-          caseUpdates.currentDraftVersion = version;
-          caseUpdates.status = eligibility.path === "HUMAN_REVIEW" ? "REVISAO_HUMANA" : "AGUARDANDO_REVISAO";
-          const notificationRef = adminDb.collection("notifications").doc();
-          transaction.set(notificationRef, {
-            notificationId: notificationRef.id,
-            userId: legalCase.citizenId,
-            caseId: parsed.data.caseId,
-            type: "DRAFT_READY",
-            title: "Minuta pronta para revisão",
-            message: "Uma nova versão da minuta está disponível. Revise as informações antes de aprovar.",
-            read: false,
-            createdAt: new Date(),
-          });
-        }
-        transaction.update(caseSnapshot.ref, caseUpdates);
+    const incompleteReason = response.incomplete_details?.reason;
+    const inputTokens = response.usage?.input_tokens ?? 0;
+    const outputTokens = response.usage?.output_tokens ?? 0;
+    logger.info("jurisbot_openai_response", {
+      model: OPENAI_CHAT_MODEL,
+      status: response.status,
+      incompleteReason,
+      latencyMs: Date.now() - startedAt,
+      inputTokens,
+      outputTokens,
+      requestId: response._request_id || undefined,
+    });
+    if (response.status === "incomplete") {
+      const incompleteError = Object.assign(new Error("OpenAI response incomplete"), {
+        status: 502,
+        code: incompleteReason === "max_output_tokens" ? "AI_OUTPUT_TRUNCATED" : "AI_OUTPUT_INCOMPLETE",
       });
+      throw incompleteError;
+    }
+    const payload = response.output_parsed;
+    if (!payload) {
+      const invalidError = Object.assign(new Error("OpenAI response missing parsed output"), { status: 502, code: "AI_INVALID_RESPONSE" });
+      throw invalidError;
     }
 
-    const botMessageRef = caseSnapshot.ref.collection("messages").doc();
-    await botMessageRef.set({
-      messageId: botMessageRef.id,
-      caseId: parsed.data.caseId,
-      sender: "BOT",
-      senderName: "JurisBot",
-      content: payload.reply,
-      timestamp: new Date(),
+    const data = mergeStructuredData(legalCase.structuredData, payload.structuredData as StructuredCaseData);
+    const eligibility = evaluateCaseEligibility(data);
+    const now = new Date();
+    await adminDb.runTransaction(async (transaction) => {
+      const freshCase = await transaction.get(caseSnapshot.ref);
+      if (!freshCase.exists) throw new Error("case_deleted");
+      transaction.update(caseSnapshot.ref, {
+        structuredData: data,
+        summary: data.caseSummary || legalCase.summary,
+        category: data.category || legalCase.category,
+        requiresHumanReview: eligibility.path === "HUMAN_REVIEW",
+        humanReviewReason: eligibility.reasons.join(" ") || null,
+        status: eligibility.path === "HUMAN_REVIEW" ? "REVISAO_HUMANA" : data.draftReady ? "PREPARANDO_MINUTA" : "COLETANDO_INFORMACOES",
+        updatedAt: now,
+      });
+      transaction.update(responseMessageRef!, {
+        sender: "BOT",
+        senderName: "JurisBot",
+        content: payload.assistantMessage,
+        structuredData: data,
+        hidden: false,
+        processingState: "COMPLETED",
+        timestamp: now,
+      });
     });
 
-    return NextResponse.json(payload);
-  } catch (error) {
-    const failure = classifyOpenAIError(error);
-    logger.error("jurisbot_request_failed", {
-      errorType: failure.errorType,
-      upstreamStatus: failure.upstreamStatus,
-      upstreamCode: failure.upstreamCode,
-      requestId: failure.requestId,
+    logger.info("jurisbot_openai_completed", {
+      model: OPENAI_CHAT_MODEL, status: response.status,
+      latencyMs: Date.now() - startedAt, inputTokens, outputTokens,
+      estimatedCostUsd: Number(estimateLunaCost(inputTokens, outputTokens).toFixed(8)), requestId: response._request_id || undefined,
     });
-    return errorResponse(failure.error, failure.message, failure.status);
+    return NextResponse.json({ reply: payload.assistantMessage, structuredData: data, draftReady: data.draftReady });
+  } catch (error) {
+    if (reservationCreated && responseMessageRef) {
+      await responseMessageRef.update({ processingState: "FAILED", hidden: true, content: "", failedAt: new Date() }).catch(() => undefined);
+    }
+    const safe = safeOpenAIError(error);
+    logger.error("jurisbot_request_failed", { errorType: safe.type, upstreamStatus: safe.status, upstreamCode: safe.code });
+    if (safe.status === 429) return errorResponse("AI_RATE_LIMITED", "O JurisBot atingiu temporariamente o limite de uso. Tente novamente.", 429);
+    if (safe.status === 401 || safe.status === 403) return errorResponse("AI_UNAVAILABLE", "O JurisBot está temporariamente indisponível.", 503);
+    if (safe.code === "AI_OUTPUT_TRUNCATED") return errorResponse("AI_OUTPUT_TRUNCATED", "Não consegui concluir a análise desta mensagem. Tente novamente.", 502);
+    if (safe.code === "AI_INVALID_RESPONSE" || safe.code === "AI_OUTPUT_INCOMPLETE") return errorResponse("AI_INVALID_RESPONSE", "Não consegui concluir a análise desta mensagem. Tente novamente.", 502);
+    return errorResponse("AI_UNAVAILABLE", "Não foi possível obter uma resposta agora. Tente novamente.", 503);
   }
 }

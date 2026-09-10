@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DraftVersionList } from "@/components/drafts/DraftVersionList";
 import { UploadProgress } from "@/components/evidence/UploadProgress";
 import LoginPage from "@/app/login/page";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import type { DraftVersion } from "@/types";
 
 const mocks = vi.hoisted(() => ({
@@ -42,7 +44,7 @@ describe("componentes críticos", () => {
   it("mostra erro real de login e não redireciona", async () => {
     mocks.loginWithEmail.mockRejectedValue(new Error("Credenciais inválidas"));
     render(<LoginPage />);
-    fireEvent.change(screen.getByLabelText("Usuário ou e-mail"), { target: { value: "teste@example.com" } });
+    fireEvent.change(screen.getByLabelText("Email ou Usuário"), { target: { value: "teste@example.com" } });
     fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "senha-inválida" } });
     fireEvent.click(document.querySelector('button[type="submit"]')!);
     expect(await screen.findByText("Credenciais inválidas")).toBeInTheDocument();
@@ -62,5 +64,19 @@ describe("componentes críticos", () => {
     fireEvent.click(screen.getByRole("button", { name: "Versão 1" }));
     await waitFor(() => expect(onSelect).toHaveBeenCalledWith(1));
     expect(screen.getByRole("button", { name: "Versão 2 — final" })).toBeInTheDocument();
+  });
+
+  it("mantém contraste e visibilidade nas variantes críticas", () => {
+    render(
+      <>
+        <Button variant="secondary" disabled>Continuar</Button>
+        <Badge status="AGUARDANDO_REVISAO" />
+      </>,
+    );
+
+    const button = screen.getByRole("button", { name: "Continuar" });
+    expect(button).toHaveClass("text-jus-petroleum", "disabled:opacity-100", "disabled:text-slate-700");
+    expect(button).not.toHaveClass("disabled:opacity-50");
+    expect(screen.getByText("Aguardando Revisão")).toHaveClass("text-jus-caramel-contrast");
   });
 });

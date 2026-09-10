@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import mammoth from "mammoth";
+import { PDFParse } from "pdf-parse";
 
 export interface ExtractionResult {
   text: string;
@@ -55,9 +56,6 @@ export async function extractEvidenceText(buffer: Buffer, mimeType: string, file
   }
   if (extension === ".xlsx") return capped(await workbookToText(buffer), "XLSX");
   if (mimeType === "application/pdf") {
-    // Load pdf-parse only for PDF evidence. This keeps pdfjs/browser globals out of
-    // non-PDF test and server paths, and avoids import-time DOMMatrix failures.
-    const { PDFParse } = await import("pdf-parse");
     const parser = new PDFParse({ data: buffer });
     try {
       const result = await parser.getText({ first: 50 });

@@ -1,25 +1,5 @@
 # JusFácil
 
-## Modo visual sem Firebase (temporário)
-
-Para trabalhar exclusivamente nas telas enquanto o Firebase não está configurado, o projeto inclui um modo visual isolado.
-
-```env
-NEXT_PUBLIC_UI_DEV_MODE=true
-```
-
-Com a variável ativa:
-
-- `/` vira um seletor de perfil de demonstração (Cidadão ou Advogado);
-- `/login` continua preservado como **login original arquivado**, mas não autentica;
-- Home, dashboards, casos, notificações, suporte, perfis, JurisBot, minutas, evidências e atualização do advogado usam dados simulados locais;
-- nenhuma chamada ao Firebase ou à OpenAI é necessária para navegar e revisar a interface;
-- uma faixa amarela identifica claramente o ambiente de desenvolvimento;
-- `Restaurar dados demo` apaga alterações locais e recria o conjunto inicial.
-
-Os dados simulados ficam somente no `localStorage` do navegador. Eles não são fallback de produção e só existem quando `NEXT_PUBLIC_UI_DEV_MODE=true`. Para retornar ao fluxo real, defina a variável como `false` e configure as variáveis Firebase/OpenAI normalmente.
-
-
 > 🚧 **PROJETO EM DESENVOLVIMENTO**
 >
 > O JusFácil está em evolução contínua. Algumas integrações, funcionalidades e validações ainda estão em andamento. Este repositório representa o estado atual de desenvolvimento do projeto e é utilizado como portfólio técnico.
@@ -27,25 +7,6 @@ Os dados simulados ficam somente no `localStorage` do navegador. Eles não são 
 Plataforma web de auxílio à organização de demandas cíveis, evidências e minutas, com triagem conversacional assistida por inteligência artificial. O projeto explora autenticação por perfis, autorização por caso, persistência documental e respostas estruturadas de IA em uma aplicação full stack.
 
 > **Aviso jurídico:** o JusFácil é um projeto educacional e de portfólio. Ele não substitui advogado, Defensoria Pública, órgão público ou decisão judicial; não protocola ações, não garante resultados e não deve ser tratado como sistema pronto para produção.
-
-## Requisito de ambiente
-
-O projeto requer **Node.js 22 ou superior**. As versões atuais de `firebase-admin`, `openai` e outras dependências do projeto não suportam Node.js 20.13.
-
-Verifique antes de instalar:
-
-```bash
-node -v
-```
-
-O resultado deve começar com `v22` (ou superior). Com NVM:
-
-```bash
-nvm install 22
-nvm use 22
-```
-
-No Windows sem NVM, instale a versão LTS 22 do Node.js e abra um novo terminal.
 
 ## Sobre o projeto
 
@@ -64,12 +25,13 @@ Operações sensíveis no servidor verificam o Firebase ID Token e a autorizaç�
 ```text
 Navegador
   ├── Firebase Authentication
-  ├── Firestore / Storage protegidos por regras
+  ├── Firestore protegido por regras
   └── Next.js Route Handlers
         ├── verificação de ID Token
         ├── autorização por usuário, papel e caso
-        ├── OpenAI + Structured Outputs + Zod
-        └── Firebase Admin + persistência
+        ├── OpenAI Responses API + Structured Outputs + Zod
+        ├── extração temporária de evidências, sem reter o arquivo original
+        └── Firebase Admin + persistência de dados estruturados
 ```
 
 ## 🚧 Status do desenvolvimento
@@ -78,16 +40,16 @@ Navegador
 |---|---|---|
 | Interface responsiva | Em refinamento | Fluxos principais implementados para desktop e mobile |
 | Next.js, React e TypeScript | Implementado | App Router, componentes e rotas de servidor |
-| Firebase Authentication | Validado | Cadastro, login, logout e recuperação de senha testados com projeto real |
+| Firebase Authentication | Parcialmente validado | Cadastro, login e logout validados com Firebase real; recuperação de senha implementada, com validação E2E pendente. |
 | Cloud Firestore | Validado | Perfil cidadão e caso fictício persistidos no projeto real |
-| Firebase Storage | Parcial | Integração e regras implementadas; validação real depende da ativação do Storage no projeto |
-| JurisBot | Parcial | Fluxo, autenticação, autorização e persistência implementados |
-| OpenAI API | Pendente de crédito | A chamada real alcança a API, mas o projeto retorna `credit_balance_exhausted` |
-| Structured Outputs + Zod | Implementado | Schemas e validações cobertos por testes automatizados; E2E com resposta real aguarda crédito |
-| Minutas e versionamento | Implementado | Fluxo de gerar, revisar, versionar e aprovar; validação E2E aguarda resposta real da IA |
-| Portal do advogado | Implementado, em validação | Home, casos, dashboard, suporte, perfil e atualização de casos; validação E2E final ainda pendente |
+| Evidências sem Storage | Parcialmente validado | TXT validado ponta a ponta com OpenAI real; PDF, DOCX, CSV, XLSX, PNG e JPG possuem suporte implementado, mas aguardam validação E2E real. |
+| JurisBot | Validado | Autenticação, autorização, perguntas progressivas e persistência validadas com caso sintético |
+| OpenAI API | Validado | Responses API com `gpt-5.6-luna` validada por chamadas reais e baixo custo |
+| Structured Outputs + Zod | Validado | Respostas reais validadas pelo schema e contratos cobertos por testes automatizados |
+| Minutas e versionamento | Validado | Geração V1, revisão V2, histórico, aprovação e PDF validados ponta a ponta |
+| Portal do advogado | Em desenvolvimento | Aprovação e atribuição explícita previstas no fluxo |
 | Administração | Em desenvolvimento | Área protegida existente, ainda sem validação funcional final |
-| Testes automatizados | Ampliados | Unidade, API, componentes, validação de avatar e regras de autorização; execução final deve ser feita após instalar as dependências |
+| Testes automatizados | 49 aprovados | 7 arquivos de unidade, API, componentes, schemas e regras de domínio; Rules não executadas nesta rodada por Java 8 |
 | Deploy público | Planejado | Este repositório ainda não representa uma versão de produção |
 
 ## Progresso
@@ -102,14 +64,15 @@ Navegador
 - [x] Autorização por caso
 - [x] Zod e Structured Outputs
 - [x] Remoção de fallbacks jurídicos fictícios
+- [x] Validação ponta a ponta do JurisBot com OpenAI real
+- [x] Evidência TXT processada sem retenção do arquivo original
+- [x] Geração, revisão, aprovação e PDF de minuta com dados sintéticos
 - [x] Testes automatizados e build de produção
 
 ### 🟡 Em desenvolvimento
 
-- [ ] Validação ponta a ponta da resposta OpenAI
-- [ ] Validação real completa das minutas e do versionamento
-- [ ] Validação de upload no Firebase Storage ativo
-- [ ] Refinamento visual e ampliação do processamento de evidências
+- [ ] Validação E2E real dos demais formatos de evidência além de TXT
+- [ ] Refinamento visual e ampliação opcional do processamento de evidências
 - [ ] Testes E2E e testes de Rules com Firebase Emulator
 - [ ] Revisões jurídica e LGPD
 - [ ] Deploy público
@@ -132,7 +95,7 @@ Todas as telas autenticadas abaixo usam uma conta e um caso completamente fictí
     <td><img src="docs/screenshots/jurisbot.png" alt="Conversa com o JurisBot"><br><sub>JurisBot com caso fictício</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/minuta.png" alt="Painel de minuta ainda indisponível"><br><sub>Minuta — estado real ainda em validação</sub></td>
+    <td><img src="docs/screenshots/minuta.png" alt="Painel de minuta do JusFácil"><br><sub>Minuta versionada para revisão</sub></td>
     <td><img src="docs/screenshots/perfil.png" alt="Perfil da conta fictícia"><br><sub>Perfil</sub></td>
   </tr>
 </table>
@@ -141,7 +104,7 @@ Todas as telas autenticadas abaixo usam uma conta e um caso completamente fictí
 
 - Next.js 16, React 19 e TypeScript 5.9
 - Tailwind CSS 4
-- Firebase Authentication, Cloud Firestore, Storage e Admin SDK
+- Firebase Authentication, Cloud Firestore e Admin SDK
 - OpenAI API com Structured Outputs
 - Zod para validação de dados estruturados
 - Vitest, Testing Library e Firebase Rules Unit Testing
@@ -194,8 +157,9 @@ erDiagram
       string evidenceId PK
       string caseId FK
       string originalName
-      string storagePath
       string status
+      boolean originalRetained
+      object analysis
     }
 ```
 
@@ -207,21 +171,20 @@ erDiagram
 | `/cases/{caseId}` | `caseId`, `citizenId`, `assignedLawyerId`, `title`, `category`, `summary`, `originalStory`, `status`, `structuredData`, `currentDraftVersion`, `createdAt`, `updatedAt` | Caso e estado da triagem |
 | `/cases/{caseId}/messages/{messageId}` | `messageId`, `caseId`, `sender`, `senderName`, `content`, `timestamp` | Histórico conversacional |
 | `/cases/{caseId}/drafts/{version}` | `version`, `caseId`, `title`, `content`, `approved`, `feedback`, `source`, `changeSummary`, `createdAt` | Minutas versionadas |
-| `/cases/{caseId}/evidences/{evidenceId}` | `evidenceId`, `caseId`, `originalName`, `mimeType`, `size`, `storagePath`, `status`, `fileUrl`, `uploadedAt`, `extractedText`, `analysis` | Evidências e processamento |
+| `/cases/{caseId}/evidences/{evidenceId}` | `evidenceId`, `caseId`, `originalName`, `mimeType`, `size`, `status`, `originalRetained`, `analysis`, `uploadedAt` | Metadados e análise estruturada; o original e o texto bruto não são persistidos |
 | `/notifications/{notificationId}` | `notificationId`, `userId`, `caseId`, `title`, `message`, `type`, `read`, `createdAt` | Notificações por usuário |
 | `/supportTickets/{ticketId}` | `ticketId`, `userId`, `category`, `subject`, `message`, `status`, `createdAt`, `updatedAt` | Solicitações de suporte |
 
 ## Funcionalidades implementadas
 
-- Cadastro e autenticação de cidadãos e advogados, Google Sign-In e recuperação de senha.
+- Cadastro e autenticação de cidadãos e advogados; Google Sign-In e recuperação de senha implementados, com validação E2E pendente.
 - Perfil cidadão persistido com papel `CITIZEN`; advogado inicia com análise pendente.
 - Casos com protocolo próprio, status e autorização por proprietário ou profissional atribuído.
-- JurisBot autenticado com contexto do caso, rate limit, saída estruturada e mensagens persistidas.
+- JurisBot autenticado com contexto e histórico lidos do Firestore no servidor, rate limit, saída estruturada e mensagens persistidas.
 - Prompts orientados a perguntar informações ausentes e a não inventar nomes, datas, valores, documentos ou fatos.
-- Evidências com validação de nome, extensão, MIME, tamanho, upload, processamento e remoção.
+- Evidências com validação de nome, extensão, MIME e tamanho; processamento temporário no servidor e descarte do arquivo original.
 - Minutas versionadas, pedidos de alteração, aprovação transacional e geração de PDF.
 - Notificações, solicitação de revisão humana e suporte persistido.
-- Atualizações do advogado persistidas por Route Handler server-side, com autorização por caso e criação atômica de atualização + notificação ao cidadão.
 
 ## Instalação local
 
@@ -236,7 +199,7 @@ erDiagram
 ```bash
 git clone https://github.com/giulia05tomaz/Jusfacil.git
 cd Jusfacil
-npm install
+npm ci
 cp .env.example .env.local
 npm run dev
 ```
@@ -248,8 +211,6 @@ Copy-Item .env.example .env.local
 ```
 
 Abra `http://localhost:3000`.
-
-> O snapshot atual inclui `bun.lock`, mas não traz `package-lock.json`. Em um ambiente com acesso ao registry do npm, execute `npm install` uma vez e versione o `package-lock.json` gerado antes de adotar `npm ci` no pipeline.
 
 ## Variáveis de ambiente
 
@@ -267,9 +228,13 @@ Copie `.env.example` para `.env.local` e preencha apenas no seu ambiente. Nunca 
 | `FIREBASE_ADMIN_CLIENT_EMAIL` | Conta de serviço |
 | `FIREBASE_ADMIN_PRIVATE_KEY` | Chave privada com quebras escapadas |
 | `OPENAI_API_KEY` | JurisBot e análise de evidências |
-| `OPENAI_MODEL` | Modelo usado no servidor |
-| `JURISBOT_RATE_LIMIT_MAX` | Limite de solicitações por janela |
-| `JURISBOT_RATE_LIMIT_WINDOW_MS` | Duração da janela de rate limit |
+| `ALLOW_REAL_OPENAI_SMOKE` | Trava explícita do smoke real; mantenha `0` e use `1` somente com autorização consciente de custo |
+| `OPENAI_MODEL` | Modelo base usado no servidor |
+| `OPENAI_CHAT_MODEL` | Modelo do JurisBot |
+| `OPENAI_DRAFT_MODEL` | Modelo de minutas e revisões |
+| `OPENAI_CHAT_RATE_LIMIT_MAX` | Chamadas de chat por usuário a cada minuto; padrão 12 |
+| `OPENAI_DRAFT_RATE_LIMIT_MAX` | Gerações de minuta por usuário/caso a cada hora; padrão 3 |
+| `OPENAI_EVIDENCE_RATE_LIMIT_MAX` | Análises de evidência por usuário/caso a cada hora; padrão 5 |
 
 Sem credenciais válidas, o sistema deve apresentar erro explícito. Não existe resposta jurídica fictícia de fallback.
 
@@ -289,17 +254,18 @@ Sem credenciais válidas, o sistema deve apresentar erro explícito. Não existe
 
 - Firebase ID Tokens são verificados no servidor antes das operações de IA.
 - O acesso a casos valida propriedade, papel e atribuição explícita.
-- Regras do Firestore e Storage restringem documentos e arquivos por usuário e caso.
+- Regras do Firestore restringem documentos por usuário e caso.
 - Papéis, aprovação profissional e atribuição não podem ser promovidos pelo próprio cliente.
 - Segredos ficam em variáveis de ambiente; `.env*`, arquivos PEM, contas de serviço e logs são ignorados.
-- Uploads aplicam limites de extensão, MIME, tamanho e caminhos por caso.
+- O smoke test real permanece bloqueado, salvo quando `ALLOW_REAL_OPENAI_SMOKE=1` for definido explicitamente.
+- Evidências aplicam limites de extensão, MIME e tamanho; o original é descartado depois da extração/análise.
 - Aprovação de minuta e notificações relacionadas usam operação transacional.
-- O rate limit atual é local à instância e deve migrar para uma solução distribuída em produção.
+- **IN-MEMORY RATE LIMIT — DEVELOPMENT ONLY:** os limites atuais são locais à instância. Antes de qualquer deploy multi-instance, migrar os contadores para Firestore, Redis ou armazenamento compartilhado equivalente.
 
 ## Limitações conhecidas
 
-- A OpenAI respondeu com `credit_balance_exhausted` no último teste real; a resposta E2E, o preenchimento por IA e a geração de minuta aguardam crédito.
-- O Firebase Storage precisa estar ativo no projeto para a validação real de upload.
+- O fluxo sem Storage não oferece download posterior do arquivo de evidência original; somente metadados e análise estruturada permanecem no Firestore.
+- PDF/DOCX/CSV/XLSX/PNG/JPG possuem suporte de código, mas apenas TXT foi validado ponta a ponta com OpenAI real nesta rodada.
 - OCR para PDF exclusivamente digitalizado não está embarcado.
 - Não há protocolo automático em tribunais nem consulta processual externa.
 - Portais de advogado e administrador ainda precisam de validação funcional final.

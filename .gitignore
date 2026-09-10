@@ -2,7 +2,6 @@
 .env.local
 .env.production
 .env*.local
-.env.*.local
 !.env.example
 serviceAccount*.json
 service-account*.json
@@ -18,4 +17,5 @@ ui-debug.log
 *.log
 *.tsbuildinfo
 outputs/
+output/
 *.zip

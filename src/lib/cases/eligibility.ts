@@ -1,6 +1,6 @@
 import type { CaseEligibilityResult, StructuredCaseData } from "@/types";
 
-export function evaluateCaseEligibility(data: StructuredCaseData): CaseEligibilityResult {
+export function evaluateCaseEligibility(data: Partial<StructuredCaseData>): CaseEligibilityResult {
   const reasons: string[] = [];
 
   if (data.requiresHumanReview) reasons.push(data.humanReviewReason || "Revisão humana sinalizada na triagem.");

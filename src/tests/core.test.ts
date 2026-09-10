@@ -5,6 +5,7 @@ import { canTransitionCaseStatus } from "@/lib/cases/statusMachine";
 import { nextDraftVersion } from "@/lib/drafts/versioning";
 import { sanitizeFileName, validateEvidenceFile, withoutUndefined } from "@/lib/firebase/services";
 import { isAuthorizedForCase } from "@/lib/security/caseAuthorization";
+import { generateDraftPdf } from "@/lib/pdf/generateDraftPdf";
 
 describe("regras centrais", () => {
   it("encaminha baixa confiança para revisão humana", () => {
@@ -58,5 +59,17 @@ describe("persistência no Firestore", () => {
 
     expect(result.timestamp).toBe(timestamp);
     expect(result).not.toHaveProperty("ignored");
+  });
+});
+
+describe("petição inicial em PDF", () => {
+  it("mantém a petição separada do índice de evidências", () => {
+    const pdf = generateDraftPdf(
+      { caseId: "JF-2026-TESTE", title: "Caso QA", citizenId: "citizen-a", category: "Consumidor", summary: "Caso QA", originalStory: "Relato QA", status: "AGUARDANDO_REVISAO", requiresHumanReview: false, createdAt: "2026-01-01", updatedAt: "2026-01-01" },
+      { version: 1, caseId: "JF-2026-TESTE", title: "Petição Inicial", content: "1. DOS FATOS\nRelato confirmado.\nDOS PEDIDOS\n a) Restituição.", approved: false, createdBy: "citizen-a", source: "AI", createdAt: "2026-01-01" },
+      [{ evidenceId: "evidence-a", caseId: "JF-2026-TESTE", originalName: "nota.pdf", mimeType: "application/pdf", size: 100, status: "PROCESSED", uploadedAt: "2026-01-01", uploadedBy: "citizen-a", description: "Nota fiscal" }],
+    );
+    expect(pdf.getNumberOfPages()).toBeGreaterThanOrEqual(2);
+    expect(pdf.output()).toContain("ANEXO PROBATÓRIO");
   });
 });

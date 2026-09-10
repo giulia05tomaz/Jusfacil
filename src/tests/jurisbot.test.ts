@@ -1,57 +1,36 @@
-import { describe, it, expect } from "vitest";
-import {
-  StructuredCaseDataSchema,
-  JurisBotResponseSchema,
-} from "../lib/ai/schemas";
+import { describe, expect, it } from "vitest";
+import { JurisBotResponseSchema, StructuredCaseDataSchema } from "@/lib/ai/schemas";
 
 const completeStructuredData = {
-  summary: "Caso de produto com defeito e recusa da garantia pelo fornecedor.",
+  caseSummary: "Caso sintético de produto com defeito.",
   category: "Direito do Consumidor",
-  facts: ["Compra efetuada em 10/01/2026", "Geladeira parou de funcionar em 16/01/2026"],
-  timeline: [{ date: "10/01/2026", event: "Compra e pagamento" }],
-  involvedParties: [{ name: "Eletro Shop S.A.", role: "Reclamada" }],
-  claimValue: 3200,
-  userGoal: "Restituição da quantia paga",
-  missingInformation: [],
-  evidenceNeeded: ["Nota Fiscal de Compra"],
-  confidenceLevel: "HIGH" as const,
-  requiresHumanReview: false,
-  humanReviewReason: null,
-  generateDraft: true,
-  draftTitle: "Minuta de Petição Inicial - JEC",
-  draftContent: "EXCELENTÍSSIMO SENHOR DOUTOR JUIZ DE DIREITO...",
+  parties: [{ role: "Autor", name: "Pessoa QA", document: null, address: null, details: null }],
+  facts: [{ description: "Produto apresentou defeito.", date: "10/01/2026", source: "Relato" }],
+  timeline: [{ date: "10/01/2026", event: "Defeito informado" }],
+  values: [{ description: "Preço", amount: 3200, currency: "BRL" }],
+  evidence: [], legalIssues: ["Relação de consumo"], requestedRelief: ["Restituição"], missingInformation: [],
+  contradictions: [], riskFlags: [], draftReady: true, nextQuestions: [], confidenceLevel: "HIGH" as const,
+  requiresHumanReview: false, humanReviewReason: null,
 };
 
-describe("JurisBot Zod Schemas Validation", () => {
-  it("should validate a valid structured case data response", () => {
-    const parseResult = StructuredCaseDataSchema.safeParse(completeStructuredData);
-    expect(parseResult.success).toBe(true);
+describe("schemas estruturados do JurisBot", () => {
+  it("valida dados completos e draftReady", () => {
+    expect(StructuredCaseDataSchema.safeParse(completeStructuredData).success).toBe(true);
   });
 
-  it("should reject invalid confidenceLevel enum", () => {
-    const invalidData = { ...completeStructuredData, confidenceLevel: "UNKNOWN_LEVEL" };
-
-    const parseResult = StructuredCaseDataSchema.safeParse(invalidData);
-    expect(parseResult.success).toBe(false);
+  it("rejeita enum de confiança inválido", () => {
+    expect(StructuredCaseDataSchema.safeParse({ ...completeStructuredData, confidenceLevel: "UNKNOWN" }).success).toBe(false);
   });
 
-  it("should validate full JurisBot response schema", () => {
-    const mockFullPayload = {
-      reply: "Entendi o seu relato. Vamos prosseguir com a minuta.",
-      structuredData: completeStructuredData,
-    };
-
-    const parseResult = JurisBotResponseSchema.safeParse(mockFullPayload);
-    expect(parseResult.success).toBe(true);
+  it("limita perguntas progressivas a três", () => {
+    expect(StructuredCaseDataSchema.safeParse({ ...completeStructuredData, nextQuestions: ["1", "2", "3", "4"] }).success).toBe(false);
   });
 
-  it("should reject empty reply in JurisBot response schema", () => {
-    const mockEmptyPayload = {
-      reply: "",
-      structuredData: null,
-    };
+  it("valida resposta completa", () => {
+    expect(JurisBotResponseSchema.safeParse({ assistantMessage: "Vamos continuar.", structuredData: completeStructuredData }).success).toBe(true);
+  });
 
-    const parseResult = JurisBotResponseSchema.safeParse(mockEmptyPayload);
-    expect(parseResult.success).toBe(false);
+  it("rejeita mensagem vazia", () => {
+    expect(JurisBotResponseSchema.safeParse({ assistantMessage: "", structuredData: completeStructuredData }).success).toBe(false);
   });
 });
