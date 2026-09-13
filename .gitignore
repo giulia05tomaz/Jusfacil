@@ -18,4 +18,6 @@ ui-debug.log
 *.tsbuildinfo
 outputs/
 output/
+.artifacts/
+.evidence-originals/
 *.zip

@@ -87,6 +87,8 @@ export interface CaseMessage {
   senderName?: string;
   content: string;
   timestamp: string;
+  createdBy?: string;
+  revisionReview?: import("@/lib/drafts/revisionShared").RevisionProposal;
 }
 
 export interface DraftVersion {
@@ -99,6 +101,7 @@ export interface DraftVersion {
   createdBy: string;
   source: 'AI' | 'CITIZEN' | 'LAWYER' | 'ADMIN';
   changeSummary?: string;
+  revisionAdvice?: string;
   createdAt: string;
 }
 
@@ -126,6 +129,16 @@ export interface EvidenceAnalysis {
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
 }
 
+export interface EvidenceOriginal {
+  id: string;
+  caseId: string;
+  evidenceId: string;
+  sha256: string;
+  size: number;
+  mimeType: string;
+  originalName: string;
+}
+
 export interface Evidence {
   evidenceId: string;
   caseId: string;
@@ -144,7 +157,9 @@ export interface Evidence {
   confidence?: 'HIGH' | 'MEDIUM' | 'LOW';
   processedAt?: string;
   processingError?: string;
-  originalRetained?: false;
+  originalRetained?: boolean;
+  original?: EvidenceOriginal;
+  annexOriginal?: EvidenceOriginal;
   order?: number;
   reference?: string;
   title?: string;

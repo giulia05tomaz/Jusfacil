@@ -7,6 +7,9 @@ import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { inspectEvidenceZip, ZIP_LIMITS } from "@/lib/evidence/package";
 import { isAuthorizedForCase } from "@/lib/security/caseAuthorization";
 import type { DraftVersion, LegalCase, UserProfile } from "@/types";
+import type { Evidence } from "@/types";
+import { ArtifactError, artifactHash, artifactBinding, readCompleteArtifact, storeCompleteArtifact, type CompleteArtifact } from "@/lib/drafts/completeArtifact";
+import { draftNeedsEvidenceRevision } from "@/lib/drafts/evidenceExport";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -80,15 +83,32 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
     const draftSnapshot = await caseSnapshot.ref.collection("drafts").doc(`v${version}`).get();
     if (!draftSnapshot.exists) return response("DRAFT_NOT_FOUND", "A versão selecionada da minuta não foi encontrada.", 404);
     const draft = draftSnapshot.data() as DraftVersion;
+    if (draft.caseId !== caseId || draft.version !== version) return response("FORBIDDEN", "A minuta não pertence a este caso.", 403);
 
     const zipBuffer = Buffer.from(await file.arrayBuffer());
     const manifest = inspectEvidenceZip(zipBuffer, file.name);
     if (!manifest.items.length) return response("ZIP_WITHOUT_EVIDENCE", "O pacote não contém evidências compatíveis.", 400);
+    const evidenceSnapshot = await caseSnapshot.ref.collection("evidences").get();
+    const records = evidenceSnapshot.docs.map((doc) => ({ ...doc.data(), evidenceId: doc.id }) as Evidence);
+    if (!records.length || records.some((item) => item.caseId !== caseId || item.status !== "PROCESSED")
+      || manifest.items.length !== records.length || manifest.items.some((item) => !records.some((record) =>
+        record.reference === item.reference && Number(record.order) === item.order && item.variants.some((variant) => variant.sha256 === record.sha256)))) {
+      return response("ZIP_CASE_MISMATCH", "O ZIP precisa corresponder às evidências já persistidas neste caso.", 409);
+    }
+    if (draftNeedsEvidenceRevision(draft, records)) return response("DRAFT_EVIDENCE_REVISION_REQUIRED", "Revise a minuta com os documentos atuais antes de montar o arquivo final.", 409);
+    const priorArtifact = await caseSnapshot.ref.collection("draftArtifacts").doc(`v${version}`).get();
+    if (priorArtifact.exists) {
+      const meta = priorArtifact.data() as CompleteArtifact;
+      if (meta.zipHash !== artifactHash(zipBuffer)) return response("DRAFT_ARTIFACT_STALE", "Outro pacote já foi vinculado a esta minuta. Solicite uma nova versão.", 409);
+      const bytes = await readCompleteArtifact(meta, draft, records, "docx");
+      return new NextResponse(new Uint8Array(bytes), { headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "Content-Disposition": `attachment; filename="${safeDownloadName(caseId, version)}"`, "Cache-Control": "no-store" } });
+    }
 
     temporaryDirectory = await mkdtemp(path.join(tmpdir(), "jusfacil-docx-"));
     const zipPath = path.join(temporaryDirectory, "evidencias.zip");
     const textPath = path.join(temporaryDirectory, "minuta.txt");
     const outputPath = path.join(temporaryDirectory, "peticao-com-evidencias.docx");
+    const pdfPath = path.join(temporaryDirectory, "peticao-com-evidencias.pdf");
     await Promise.all([
       writeFile(zipPath, zipBuffer),
       writeFile(textPath, draft.content, "utf8"),
@@ -103,8 +123,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
       "--output", outputPath,
       "--case-id", caseId,
       "--version", String(version),
+      "--pdf-output", pdfPath,
     ]);
     const output = await readFile(outputPath);
+    const artifact = await storeCompleteArtifact(draft, records, await readFile(pdfPath), output, manifest.items.length, artifactHash(zipBuffer));
+    await db.runTransaction(async (transaction) => {
+      const artifactRef = caseSnapshot.ref.collection("draftArtifacts").doc(`v${version}`);
+      const [freshDraft, freshEvidence, existingArtifact] = await Promise.all([
+        transaction.get(draftSnapshot.ref), transaction.get(caseSnapshot.ref.collection("evidences")), transaction.get(artifactRef),
+      ]);
+      const currentRecords = freshEvidence.docs.map((doc) => ({ ...doc.data(), evidenceId: doc.id }) as Evidence);
+      if (!freshDraft.exists || artifact.binding !== artifactBinding(freshDraft.data() as DraftVersion, currentRecords)) throw new Error("ARTIFACT_CHANGED");
+      // The artifact is immutable for this draft; a different package requires a new version.
+      if (existingArtifact.exists && existingArtifact.data()!.id !== artifact.id) throw new Error("ARTIFACT_CHANGED");
+      if (!existingArtifact.exists) transaction.set(artifactRef, artifact);
+    });
     return new NextResponse(new Uint8Array(output), {
       status: 200,
       headers: {
@@ -115,7 +148,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ cas
       },
     });
   } catch (error) {
+    if (error instanceof ArtifactError) return response(error.code, error.message, 409);
     const message = error instanceof Error ? error.message : "DOCX_GENERATION_FAILED";
+    if (message === "ARTIFACT_CHANGED") return response("DRAFT_ARTIFACT_STALE", "A versão mudou durante a montagem. Revise e monte novamente.", 409);
     if (/ENOENT|not recognized|cannot find/i.test(message)) {
       return response("PYTHON_NOT_CONFIGURED", "A automação do Word ainda não encontrou o Python configurado neste ambiente.", 503);
     }

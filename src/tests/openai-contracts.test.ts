@@ -21,7 +21,13 @@ describe("contratos de minuta", () => {
   });
 
   it("aceita revisão objetiva", () => {
-    expect(DraftRequestSchema.safeParse({ clientRequestId, action: "revise", revisionRequest: "Organize os fatos." }).success).toBe(true);
+    expect(DraftRequestSchema.safeParse({ clientRequestId, action: "revise", revisionRequest: "Organize os fatos.", baseVersion: 2, reviewId: clientRequestId, confirmation: true }).success).toBe(true);
+  });
+
+  it("aceita orientação antes da revisão e bloqueia bypass da confirmação", () => {
+    expect(DraftRequestSchema.safeParse({ clientRequestId, action: "review_revision", revisionRequest: "Organize os fatos.", baseVersion: 2 }).success).toBe(true);
+    expect(DraftRequestSchema.safeParse({ clientRequestId, action: "revise", revisionRequest: "Organize os fatos.", baseVersion: 2 }).success).toBe(false);
+    expect(DraftRequestSchema.safeParse({ clientRequestId, action: "generate", revisionRequest: "Alterar valor" }).success).toBe(false);
   });
 
   it("rejeita minuta curta ou vazia", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { JurisBotResponseSchema, StructuredCaseDataSchema } from "@/lib/ai/schemas";
+import { JurisBotResponseSchema, StructuredCaseDataSchema, PersistedCaseDataSchema } from "@/lib/ai/schemas";
 
 const completeStructuredData = {
   caseSummary: "Caso sintético de produto com defeito.",
@@ -14,6 +14,12 @@ const completeStructuredData = {
 };
 
 describe("schemas estruturados do JurisBot", () => {
+  it("catálogo persistido pode exceder 20; resposta individual da IA continua limitada", () => {
+    const evidence = Array.from({ length: 66 }, (_, index) => ({ evidenceId: `e${index}`, name: `Documento ${index}`, type: "image/jpeg", summary: "QA", relevantFacts: [], uncertainties: [] }));
+    expect(PersistedCaseDataSchema.safeParse({ ...completeStructuredData, evidence }).success).toBe(true);
+    expect(StructuredCaseDataSchema.safeParse({ ...completeStructuredData, evidence }).success).toBe(false);
+    expect(PersistedCaseDataSchema.safeParse({ ...completeStructuredData, evidence: Array(401).fill(evidence[0]) }).success).toBe(false);
+  });
   it("valida dados completos e draftReady", () => {
     expect(StructuredCaseDataSchema.safeParse(completeStructuredData).success).toBe(true);
   });

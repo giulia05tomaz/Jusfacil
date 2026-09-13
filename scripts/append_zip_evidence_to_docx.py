@@ -16,6 +16,8 @@ import re
 import stat
 import sys
 import zipfile
+import hashlib
+from html import escape
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -32,6 +34,7 @@ MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
 MAX_IMAGES = 150
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
+MAX_ANNEX_PAGES = 400
 INDEX_PATTERN = re.compile(r"(?:^|/)(?:00[_ -]?indice|indice|index)[^/]*\.csv$", re.IGNORECASE)
 
 
@@ -171,7 +174,8 @@ def set_run_font(run, size: float = 12, bold: bool = False) -> None:
 
 
 def create_draft_document(draft_text: str, case_id: str, version: int) -> Document:
-    document = Document()
+    layout = Path(__file__).resolve().parent.parent / "assets" / "petition-layout.docx"
+    document = Document(layout) if layout.is_file() else Document()
     section = document.sections[0]
     section.page_width = Cm(21)
     section.page_height = Cm(29.7)
@@ -231,6 +235,124 @@ def fit_image(width_px: int, height_px: int, max_width_emu: int, max_height_emu:
     return int(width_px * ratio), int(height_px * ratio)
 
 
+def optimized_image(raw: bytes) -> tuple[bytes, int, int]:
+    with Image.open(io.BytesIO(raw)) as source:
+        if source.width * source.height > 40_000_000:
+            raise ValueError("IMAGE_PIXELS_TOO_LARGE")
+        image = ImageOps.exif_transpose(source)
+        if image.mode in {"RGBA", "LA"}:
+            background = Image.new("RGB", image.size, "white")
+            background.paste(image.convert("RGB"), mask=image.getchannel("A"))
+            image = background
+        elif image.mode != "RGB":
+            image = image.convert("RGB")
+        image.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
+        stream = io.BytesIO()
+        image.save(stream, format="JPEG", quality=70, subsampling=2, optimize=True)
+        return stream.getvalue(), image.width, image.height
+
+
+class RetainedEvidenceReader:
+    """Only reads server-generated manifest paths inside its own temporary directory."""
+    def __init__(self, manifest_path: Path):
+        self.root = manifest_path.resolve().parent
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        items = payload.get("items", [])
+        if not items or len(items) > MAX_IMAGES:
+            raise ValueError("EVIDENCE_MANIFEST_INVALID")
+        self.data: dict[str, bytes] = {}
+        self.images: list[EvidenceImage] = []
+        self.logical_count = len(items)
+        self.index_lines: list[str] = []
+        total_bytes = 0
+        for item in sorted(items, key=lambda value: value["order"]):
+            source = (self.root / item["file"]).resolve()
+            if source.parent != self.root or source.is_symlink():
+                raise ValueError("EVIDENCE_PATH_INVALID")
+            raw = source.read_bytes()
+            total_bytes += len(raw)
+            if not raw or len(raw) > MAX_IMAGE_BYTES or total_bytes > MAX_UNCOMPRESSED_BYTES:
+                raise ValueError("EVIDENCE_SIZE_INVALID")
+            if hashlib.sha256(raw).hexdigest() != item["sha256"]:
+                raise ValueError("EVIDENCE_HASH_INVALID")
+            reference, title = str(item["reference"]), str(item["title"])
+            # Use supplied labels only; never infer facts or the meaning of an image.
+            caption = title if re.match(r"^EVID[ÊE]NCIA[ _-]+" + re.escape(reference) + r"\b", title, re.I) else f"EVIDÊNCIA {reference} — {title}"
+            if len(caption) > 550:
+                raise ValueError("EVIDENCE_TITLE_INVALID")
+            self.index_lines.append(caption)
+            mime = item["mimeType"]
+            pages = []
+            if mime in {"image/png", "image/jpeg"}:
+                pages = [raw]
+            elif mime == "application/pdf":
+                import pypdfium2 as pdfium
+                if not raw.startswith(b"%PDF-"):
+                    raise ValueError("EVIDENCE_PDF_INVALID")
+                with pdfium.PdfDocument(raw) as pdf:
+                    if not len(pdf) or len(pdf) + len(self.images) > MAX_ANNEX_PAGES:
+                        raise ValueError("EVIDENCE_PAGE_LIMIT")
+                    for page_index in range(len(pdf)):
+                        page = pdf[page_index]
+                        width, height = page.get_size()
+                        if width <= 0 or height <= 0:
+                            raise ValueError("EVIDENCE_PDF_INVALID")
+                        bitmap = page.render(scale=min(2, 1600 / max(width, height)))
+                        stream = io.BytesIO()
+                        bitmap.to_pil().convert("RGB").save(stream, format="JPEG", quality=85)
+                        pages.append(stream.getvalue())
+                        bitmap.close()
+                        page.close()
+            else:
+                raise ValueError("EVIDENCE_ANNEX_FORMAT_UNSUPPORTED")
+            for page_index, raw_page in enumerate(pages):
+                key = f"evidence-{len(self.images)}"
+                self.data[key] = raw_page
+                label = caption if len(pages) == 1 else f"{caption} — Página {page_index + 1} de {len(pages)}"
+                self.images.append(EvidenceImage(int(item["order"]), reference, label, key))
+                if len(self.images) > MAX_ANNEX_PAGES:
+                    raise ValueError("EVIDENCE_PAGE_LIMIT")
+
+    def read(self, name: str) -> bytes:
+        return self.data[name]
+
+
+def create_complete_pdf(draft_text: str, case_id: str, version: int, archive: zipfile.ZipFile, images: list[EvidenceImage], output: Path) -> None:
+    from reportlab import rl_config
+    rl_config.useA85 = False
+    from reportlab.lib import colors
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, PageBreak, Image as PdfImage, KeepTogether, Spacer
+    cm = 72 / 2.54
+    body = ParagraphStyle("body", fontName="Times-Roman", fontSize=12, leading=18, alignment=TA_JUSTIFY, spaceAfter=6)
+    heading = ParagraphStyle("heading", parent=body, fontName="Times-Bold", alignment=TA_CENTER, keepWithNext=True, spaceBefore=8)
+    caption_style = ParagraphStyle("caption", fontName="Times-Bold", fontSize=10.5, leading=13, alignment=TA_CENTER, spaceAfter=8, textColor=colors.black)
+    story = []
+    for raw in draft_text.replace("\r", "").split("\n"):
+        text = raw.strip()
+        if not text:
+            continue
+        is_heading = text.startswith("#") or (len(text) <= 100 and text.upper() == text and any(c.isalpha() for c in text))
+        text = re.sub(r"^#{1,6}\s*", "", text).replace("**", "").replace("__", "")
+        text = re.sub(r"^>\s*", "", text)
+        story.append(Paragraph(escape(text), heading if is_heading else body))
+    for index, item in enumerate(images):
+        story.append(PageBreak())
+        encoded, w, h = optimized_image(archive.read(item.archive_name))
+        ratio = min(16 * cm / w, (20.5 if index == 0 else 21.5) * cm / h)
+        picture = PdfImage(io.BytesIO(encoded), width=w * ratio, height=h * ratio)
+        qa_annex = "ANEXOS DE QA" if "pacote de Nívea" in draft_text and "fictício" in draft_text else "ANEXO PROBATÓRIO EVIDÊNCIAS"
+        first_heading = [Paragraph(qa_annex, heading), Spacer(1, 8)] if index == 0 else []
+        story.append(KeepTogether([*first_heading, Paragraph(escape(item.title), caption_style), picture]))
+    def footer(canvas, doc):
+        canvas.setFont("Times-Roman", 9)
+        canvas.drawString(3 * cm, 1.4 * cm, f"JusFácil  {case_id}  Versão {version}")
+        canvas.drawRightString(19 * cm, 1.4 * cm, str(doc.page))
+    SimpleDocTemplate(str(output), pagesize=(21 * cm, 29.7 * cm), leftMargin=3 * cm, rightMargin=2 * cm,
+                      topMargin=2.5 * cm, bottomMargin=2.5 * cm, title=f"Petição Inicial {case_id} Versão {version}").build(story, onFirstPage=footer, onLaterPages=footer)
+
+
 def append_evidence_pages(document: Document, archive: zipfile.ZipFile, images: list[EvidenceImage]) -> None:
     section = document.sections[-1]
     max_width = int(section.page_width - section.left_margin - section.right_margin)
@@ -250,23 +372,11 @@ def append_evidence_pages(document: Document, archive: zipfile.ZipFile, images: 
         caption.paragraph_format.space_after = Pt(8)
         set_run_font(caption.add_run(item.title), 10.5, True)
 
-        raw_image = archive.read(item.archive_name)
-        with Image.open(io.BytesIO(raw_image)) as source:
-            image = ImageOps.exif_transpose(source)
-            if image.mode in {"RGBA", "LA"}:
-                background = Image.new("RGB", image.size, "white")
-                alpha = image.getchannel("A")
-                background.paste(image.convert("RGB"), mask=alpha)
-                image = background
-            elif image.mode != "RGB":
-                image = image.convert("RGB")
-            image_stream = io.BytesIO()
-            image.save(image_stream, format="PNG", optimize=True)
-            image_stream.seek(0)
-            width, height = fit_image(image.width, image.height, max_width, max_height)
-            paragraph = document.add_paragraph()
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            paragraph.add_run().add_picture(image_stream, width=Emu(width), height=Emu(height))
+        encoded, image_width, image_height = optimized_image(archive.read(item.archive_name))
+        width, height = fit_image(image_width, image_height, max_width, max_height)
+        paragraph = document.add_paragraph()
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        paragraph.add_run().add_picture(io.BytesIO(encoded), width=Emu(width), height=Emu(height))
 
 
 def parse_args() -> argparse.Namespace:
@@ -274,10 +384,13 @@ def parse_args() -> argparse.Namespace:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--input-docx", type=Path, help="DOCX existente ao qual as evidências serão acrescentadas.")
     source.add_argument("--draft-text", type=Path, help="Texto da minuta usado para criar o DOCX base.")
-    parser.add_argument("--zip", dest="zip_path", type=Path, required=True, help="Pacote ZIP de evidências.")
+    evidences = parser.add_mutually_exclusive_group(required=True)
+    evidences.add_argument("--zip", dest="zip_path", type=Path, help="Pacote ZIP de evidências (compatibilidade).")
+    evidences.add_argument("--evidence-manifest", type=Path, help="Manifesto privado gerado pelo servidor com originais preservados.")
     parser.add_argument("--output", type=Path, required=True, help="Arquivo DOCX de saída.")
     parser.add_argument("--case-id", default="CASO", help="Identificador exibido no Word criado a partir de texto.")
     parser.add_argument("--version", type=int, default=1, help="Versão exibida no Word criado a partir de texto.")
+    parser.add_argument("--pdf-output", type=Path, help="PDF completo com o mesmo texto e as mesmas imagens do Word.")
     return parser.parse_args()
 
 
@@ -287,21 +400,38 @@ def main() -> int:
         raise ValueError("INPUT_DOCX_INVALID")
     if args.draft_text and not args.draft_text.is_file():
         raise ValueError("DRAFT_TEXT_INVALID")
-    if not args.zip_path.is_file() or args.zip_path.suffix.casefold() != ".zip":
+    if args.zip_path and (not args.zip_path.is_file() or args.zip_path.suffix.casefold() != ".zip"):
         raise ValueError("ZIP_INVALID")
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
-    document = Document(args.input_docx) if args.input_docx else create_draft_document(
-        args.draft_text.read_text(encoding="utf-8"), args.case_id, args.version
-    )
-    with zipfile.ZipFile(args.zip_path, "r") as archive:
+    draft_text = args.draft_text.read_text(encoding="utf-8") if args.draft_text else ""
+    if args.evidence_manifest:
+        archive = RetainedEvidenceReader(args.evidence_manifest)
+        draft_text += "\n\n# RELAÇÃO DOS ANEXOS\n" + "\n".join(archive.index_lines)
+        document = Document(args.input_docx) if args.input_docx else create_draft_document(draft_text, args.case_id, args.version)
+        images = archive.images
+        append_evidence_pages(document, archive, images)
+        if args.pdf_output:
+            if not args.draft_text:
+                raise ValueError("PDF_REQUIRES_DRAFT_TEXT")
+            create_complete_pdf(draft_text, args.case_id, args.version, archive, images, args.pdf_output)
+        logical_count, warnings, source = archive.logical_count, [], "CASE_MANIFEST"
+    else:
+      document = Document(args.input_docx) if args.input_docx else create_draft_document(draft_text, args.case_id, args.version)
+      with zipfile.ZipFile(args.zip_path, "r") as archive:
         entries = validate_archive(args.zip_path, archive)
         images, warnings, source = collect_images(archive, entries)
         append_evidence_pages(document, archive, images)
+        if args.pdf_output:
+            if not args.draft_text:
+                raise ValueError("PDF_REQUIRES_DRAFT_TEXT")
+            create_complete_pdf(args.draft_text.read_text(encoding="utf-8"), args.case_id, args.version, archive, images, args.pdf_output)
+        logical_count = len(images)
     document.save(args.output)
     print(json.dumps({
         "output": str(args.output.resolve()),
         "insertedCount": len(images),
+        "evidenceCount": logical_count,
         "orderSource": source,
         "warnings": warnings,
     }, ensure_ascii=False))

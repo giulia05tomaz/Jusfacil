@@ -49,9 +49,30 @@ export const EvidenceAnalysisSchema = z.object({
   confidence: z.enum(["HIGH", "MEDIUM", "LOW"]),
 });
 
-export const DraftRequestSchema = z.object({ clientRequestId: z.string().uuid(), action: z.enum(["generate", "revise"]), revisionRequest: z.string().trim().min(1).max(2_000).optional() }).strict().superRefine((value, context) => {
-  if (value.action === "revise" && !value.revisionRequest) context.addIssue({ code: "custom", message: "Informe a alteração solicitada." });
+export const DraftRequestSchema = z.object({
+  clientRequestId: z.string().uuid(), action: z.enum(["generate", "review_revision", "revise"]),
+  revisionRequest: z.string().trim().min(1).max(2_000).optional(),
+  baseVersion: z.number().int().positive().optional(), reviewId: z.string().uuid().optional(),
+  confirmation: z.boolean().optional(),
+}).strict().superRefine((value, context) => {
+  if (value.action === "generate" && (value.revisionRequest || value.baseVersion || value.reviewId || value.confirmation !== undefined)) context.addIssue({ code: "custom", message: "Use o fluxo de revisão para solicitar alterações." });
+  if (value.action !== "generate" && (!value.revisionRequest || !value.baseVersion)) context.addIssue({ code: "custom", message: "Informe a alteração e a versão atual." });
+  if (value.action === "revise" && (!value.reviewId || value.confirmation !== true)) context.addIssue({ code: "custom", message: "Confirme a orientação antes de gerar a revisão." });
 });
+
+export const RevisionReviewSchema = z.object({
+  advice: z.string().min(1).max(3_000),
+  ready: z.boolean(), questions: z.array(z.string().min(1).max(500)).max(3),
+  changeSummary: z.string().min(1).max(1_000),
+  structuredData: StructuredCaseDataSchema,
+});
+
+// Dados acumulados por uploads/histórico não têm o limite de uma resposta
+// individual da IA. Mantém validação de cada item e um limite finito.
+export const PersistedCaseDataSchema = StructuredCaseDataSchema.extend({
+  evidence: z.array(StructuredCaseDataSchema.shape.evidence.element).max(400),
+});
+export const PersistedRevisionReviewSchema = RevisionReviewSchema.extend({ structuredData: PersistedCaseDataSchema });
 
 export const DraftResponseSchema = z.object({ content: z.string().min(500).max(30_000), changeSummary: z.string().min(1).max(1_000) });
 

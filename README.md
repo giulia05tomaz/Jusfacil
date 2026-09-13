@@ -30,7 +30,7 @@ Navegador
         ├── verificação de ID Token
         ├── autorização por usuário, papel e caso
         ├── OpenAI Responses API + Structured Outputs + Zod
-        ├── extração temporária de evidências, sem reter o arquivo original
+        ├── análise de evidências e retenção privada dos originais no ambiente local
         └── Firebase Admin + persistência de dados estruturados
 ```
 
@@ -65,7 +65,8 @@ Navegador
 - [x] Zod e Structured Outputs
 - [x] Remoção de fallbacks jurídicos fictícios
 - [x] Validação ponta a ponta do JurisBot com OpenAI real
-- [x] Evidência TXT processada sem retenção do arquivo original
+- [x] Evidência TXT processada; validação histórica com OpenAI real, anterior à retenção local de originais
+- [x] Montagem de PDF/Word com anexos físicos JPG/PNG/PDF pelo Python, a partir da versão e dos arquivos do caso; montagem não chama OpenAI
 - [x] Geração, revisão, aprovação e PDF de minuta com dados sintéticos
 - [x] Testes automatizados e build de produção
 
@@ -171,7 +172,7 @@ erDiagram
 | `/cases/{caseId}` | `caseId`, `citizenId`, `assignedLawyerId`, `title`, `category`, `summary`, `originalStory`, `status`, `structuredData`, `currentDraftVersion`, `createdAt`, `updatedAt` | Caso e estado da triagem |
 | `/cases/{caseId}/messages/{messageId}` | `messageId`, `caseId`, `sender`, `senderName`, `content`, `timestamp` | Histórico conversacional |
 | `/cases/{caseId}/drafts/{version}` | `version`, `caseId`, `title`, `content`, `approved`, `feedback`, `source`, `changeSummary`, `createdAt` | Minutas versionadas |
-| `/cases/{caseId}/evidences/{evidenceId}` | `evidenceId`, `caseId`, `originalName`, `mimeType`, `size`, `status`, `originalRetained`, `analysis`, `uploadedAt` | Metadados e análise estruturada; o original e o texto bruto não são persistidos |
+| `/cases/{caseId}/evidences/{evidenceId}` | `evidenceId`, `caseId`, `originalName`, `mimeType`, `size`, `status`, `originalRetained`, `original`, `annexOriginal`, `analysis`, `uploadedAt` | Metadados e análise; originais em diretório privado local, nunca no Firestore ou em public/ |
 | `/notifications/{notificationId}` | `notificationId`, `userId`, `caseId`, `title`, `message`, `type`, `read`, `createdAt` | Notificações por usuário |
 | `/supportTickets/{ticketId}` | `ticketId`, `userId`, `category`, `subject`, `message`, `status`, `createdAt`, `updatedAt` | Solicitações de suporte |
 
@@ -182,7 +183,7 @@ erDiagram
 - Casos com protocolo próprio, status e autorização por proprietário ou profissional atribuído.
 - JurisBot autenticado com contexto e histórico lidos do Firestore no servidor, rate limit, saída estruturada e mensagens persistidas.
 - Prompts orientados a perguntar informações ausentes e a não inventar nomes, datas, valores, documentos ou fatos.
-- Evidências com validação de nome, extensão, MIME e tamanho; processamento temporário no servidor e descarte do arquivo original.
+- Evidências com validação de nome, extensão, MIME e tamanho; originais preservados no diretório privado local `.evidence-originals/`, vinculado ao caso/evidência e validado por hash.
 - Minutas versionadas, pedidos de alteração, aprovação transacional e geração de PDF.
 - Notificações, solicitação de revisão humana e suporte persistido.
 
@@ -258,13 +259,15 @@ Sem credenciais válidas, o sistema deve apresentar erro explícito. Não existe
 - Papéis, aprovação profissional e atribuição não podem ser promovidos pelo próprio cliente.
 - Segredos ficam em variáveis de ambiente; `.env*`, arquivos PEM, contas de serviço e logs são ignorados.
 - O smoke test real permanece bloqueado, salvo quando `ALLOW_REAL_OPENAI_SMOKE=1` for definido explicitamente.
-- Evidências aplicam limites de extensão, MIME e tamanho; o original é descartado depois da extração/análise.
+- Evidências aplicam limites de extensão, MIME e tamanho; os novos uploads preservam originais privados neste ambiente local para anexação às versões seguintes.
 - Aprovação de minuta e notificações relacionadas usam operação transacional.
 - **IN-MEMORY RATE LIMIT — DEVELOPMENT ONLY:** os limites atuais são locais à instância. Antes de qualquer deploy multi-instance, migrar os contadores para Firestore, Redis ou armazenamento compartilhado equivalente.
 
 ## Limitações conhecidas
 
-- O fluxo sem Storage não oferece download posterior do arquivo de evidência original; somente metadados e análise estruturada permanecem no Firestore.
+- A retenção dos originais e dos documentos completos é local e privada, não armazenamento durável de uma implantação pública. Uma implantação precisa de backend privado durável. Registros antigos sem originais exigem reanexação dos mesmos arquivos; não há fallback que substitua anexos físicos por referências.
+- Anexação visual automática aceita JPG, PNG e todas as páginas de PDF. TXT, CSV, XLSX e DOCX mantêm suporte de análise, mas precisam ser fornecidos em PDF/imagem para anexação visual; a montagem bloqueia formatos incompatíveis sem omiti-los. PDF digitalizado sem texto pode ser anexado, mas não é marcado como OCR/análise pela IA.
+- Configuração Python: instalar `requirements-docx.txt` e apontar `JUSFACIL_PYTHON_BIN` para esse interpretador quando necessário. A geração e a revisão acionam montagem separada da chamada OpenAI; falha na montagem permite nova tentativa sem gerar outro texto. Confira **Visualizar documento completo com evidências** e **Ver anexos das evidências** antes de aprovar e usar o envio de teste.
 - PDF/DOCX/CSV/XLSX/PNG/JPG possuem suporte de código, mas apenas TXT foi validado ponta a ponta com OpenAI real nesta rodada.
 - OCR para PDF exclusivamente digitalizado não está embarcado.
 - Não há protocolo automático em tribunais nem consulta processual externa.

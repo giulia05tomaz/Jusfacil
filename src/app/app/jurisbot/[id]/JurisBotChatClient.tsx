@@ -31,9 +31,15 @@ import {
   FileCode,
 } from "lucide-react";
 import { generateDraftPdf } from "@/lib/pdf/generateDraftPdf";
+import { exportEvidences } from "@/lib/drafts/evidenceExport";
 import { getFriendlyError } from "@/lib/errors";
 import { DraftVersionList } from "@/components/drafts/DraftVersionList";
 import { UploadProgress } from "@/components/evidence/UploadProgress";
+import { SubmissionActions, SubmissionFlow, type SubmissionFlowHandle } from "@/components/submission/SubmissionFlow";
+import { currentApprovedDraftVersion } from "@/lib/submission/shared";
+import { assembleDocument, retrieveDocument } from "@/lib/drafts/documentClient";
+import { createDraftRequestId, draftRequest } from "@/lib/drafts/revisionClient";
+import { RevisionProposalSchema, type RevisionProposal } from "@/lib/drafts/revisionShared";
 
 type PackageManifest = {
   packageName: string;
@@ -81,11 +87,21 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
   const [processingPackage, setProcessingPackage] = useState(false);
   const [packageProcessed, setPackageProcessed] = useState(false);
   const [generatingEvidenceDocx, setGeneratingEvidenceDocx] = useState(false);
+  const [buildingDocument, setBuildingDocument] = useState(false);
+  const [documentPreview, setDocumentPreview] = useState<{ caseId: string; version: number; url: string; page: number; pages: number; firstAnnexPage: number } | null>(null);
 
   // Feedback state
   const [feedbackText, setFeedbackText] = useState("");
+  const [revisionReview, setRevisionReview] = useState<RevisionProposal | null>(null);
+  const [revisionInChat, setRevisionInChat] = useState(false);
+  const revisionHydratedCase = useRef<string | null>(null);
+  const [revisionNotice, setRevisionNotice] = useState("");
+  const [revisingDraft, setRevisingDraft] = useState(false);
+  const revisionBusy = useRef(false);
+  const revisionAttempt = useRef<{ signature: string; clientRequestId: string } | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const submissionFlowRef = useRef<SubmissionFlowHandle>(null);
 
   const packageRequest = async (url: string, form: FormData, forceRefresh = false) => {
     const currentUser = auth.currentUser || user;
@@ -107,6 +123,11 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
       setMessages(msgs);
       setDrafts(drfs);
       setEvidences(evs);
+      if (revisionHydratedCase.current !== caseId) {
+        revisionHydratedCase.current = caseId;
+        const saved = [...msgs].reverse().filter(item => item.createdBy === user?.uid).map(item => RevisionProposalSchema.safeParse(item.revisionReview)).find(item => item.success && item.data.baseVersion === c?.currentDraftVersion);
+        if (saved?.success) { setRevisionReview(saved.data); setFeedbackText(saved.data.revisionRequest); setRevisionInChat(true); }
+      }
       setErrorMessage("");
     } catch (error) {
       setErrorMessage(getFriendlyError(error));
@@ -125,6 +146,35 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => () => { if (documentPreview) URL.revokeObjectURL(documentPreview.url); }, [documentPreview]);
+
+  const previewCompleteDocument = async (version: number, assemble = false, page = 1) => {
+    const currentUser = auth.currentUser || user;
+    if (!currentUser || buildingDocument) return;
+    setBuildingDocument(true);
+    setErrorMessage("");
+    try {
+      if (assemble) await assembleDocument(currentUser, caseId, version);
+      const response = await retrieveDocument(currentUser, caseId, version, "page", page);
+      if (!response.ok) { const error = await response.json().catch(() => null); throw new Error(error?.message || "Não foi possível visualizar o documento completo."); }
+      setDocumentPreview({ caseId, version, url: URL.createObjectURL(await response.blob()), page, pages: Number(response.headers.get("X-Document-Pages")), firstAnnexPage: Number(response.headers.get("X-First-Annex-Page")) });
+      setActiveTab("draft");
+      return true;
+    } catch (error) { setErrorMessage(getFriendlyError(error)); return false; }
+    finally { setBuildingDocument(false); }
+  };
+
+  const finishDraftRevision = async (version: number) => {
+    setFeedbackText(""); setRevisionReview(null); revisionAttempt.current = null;
+    setSelectedDraftVersion(version); setActiveTab("draft");
+    await loadData();
+    setRevisionNotice(`Versão ${version} salva para revisão. A versão anterior foi preservada. Confira o documento completo e aprove esta nova versão antes de enviá-la.`);
+    if (evidences.length) {
+      const mounted = await previewCompleteDocument(version, true);
+      if (!mounted) setRevisionNotice(`O texto da versão ${version} foi salvo, mas a montagem com evidências não foi concluída. Use “Visualizar documento completo com evidências” para retomar a montagem sem gerar outra versão. Ainda não aprove nem envie.`);
+    }
+  };
+
   const sendMessage = async (userText: string) => {
     if (!userText.trim() || sending || !user) return;
 
@@ -134,7 +184,7 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
     setSending(true);
 
     const userMsgObj: CaseMessage = {
-      messageId: crypto.randomUUID(),
+      messageId: createDraftRequestId(),
       caseId,
       sender: "USER",
       senderName: profile?.fullName || "Você",
@@ -172,8 +222,10 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
       }
 
       if (data.reply) {
+        const proposal = RevisionProposalSchema.safeParse(data.revisionReview);
+        if (proposal.success) { setRevisionReview(proposal.data); setFeedbackText(proposal.data.revisionRequest); setRevisionInChat(true); setRevisionNotice(""); }
         const botMsgObj: CaseMessage = {
-          messageId: crypto.randomUUID(),
+          messageId: createDraftRequestId(),
           caseId,
           sender: "BOT",
           senderName: "JurisBot",
@@ -181,7 +233,8 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
           timestamp: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, botMsgObj]);
-        await loadData();
+        if (Number.isInteger(data.version) && legalCase?.currentDraftVersion && data.version > legalCase.currentDraftVersion) await finishDraftRevision(data.version);
+        else await loadData();
       }
     } catch (error) {
       setErrorMessage(getFriendlyError(error));
@@ -212,13 +265,14 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
     setErrorMessage("");
     try {
       validateEvidenceFile(selectedFile);
-      const evidenceId = crypto.randomUUID();
+      const evidenceId = createDraftRequestId();
       setUploadProgress(25);
       const form = new FormData();
       form.set("file", selectedFile);
       form.set("caseId", caseId);
       form.set("evidenceId", evidenceId);
       form.set("description", evidenceDesc || evidenceName);
+      form.set("title", evidenceName);
       const response = await fetch("/api/evidences/process", {
         method: "POST",
         headers: { Authorization: `Bearer ${await user.getIdToken()}` },
@@ -266,15 +320,14 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
   };
 
   const downloadEvidenceDocx = async () => {
-    const draft = drafts[0];
-    if (!zipFile || !packageManifest || !draft || generatingEvidenceDocx) return;
+    const draft = drafts.find((item) => item.version === selectedDraftVersion) || drafts[0];
+    if (!draft || generatingEvidenceDocx) return;
     setGeneratingEvidenceDocx(true);
     setErrorMessage("");
     try {
-      const form = new FormData();
-      form.set("file", zipFile);
-      form.set("version", String(draft.version));
-      const response = await packageRequest(`/api/cases/${caseId}/evidence-package/docx`, form);
+      const currentUser = auth.currentUser || user;
+      if (!currentUser) throw new Error("Entre novamente para baixar o documento.");
+      const response = await retrieveDocument(currentUser, caseId, draft.version, "docx");
       if (!response.ok) {
         const data = await response.json().catch(() => null) as { message?: string } | null;
         throw new Error(data?.message || "Não foi possível montar o Word com as evidências.");
@@ -299,8 +352,9 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
 
   const handleApproveDraft = async () => {
     const current = drafts[0];
-    if (!legalCase || !current || !user) return;
+    if (!legalCase || !current || !user || buildingDocument || generatingDraft || sending) return;
     try {
+      if (evidences.length) await assembleDocument(user, caseId, current.version);
       const response = await fetch(`/api/cases/${caseId}/drafts/${current.version}/approve`, {
         method: "POST",
         headers: { Authorization: `Bearer ${await user.getIdToken()}` },
@@ -334,23 +388,39 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
     }
   };
 
-  const handleRequestDraftChange = async () => {
-    if (!feedbackText.trim() || !user) return;
+  const handleRequestDraftChange = async (confirm = false) => {
+    if (!feedbackText.trim() || !user || revisionBusy.current || !legalCase?.currentDraftVersion) return;
+    if (confirm && (!revisionReview?.ready || revisionReview.baseVersion !== legalCase.currentDraftVersion)) return;
+    revisionBusy.current = true;
+    setRevisingDraft(true);
     setSending(true);
+    setErrorMessage("");
+    setRevisionNotice("");
+    if (!confirm) setRevisionInChat(false);
     try {
-      const response = await fetch(`/api/cases/${caseId}/draft`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` },
-        body: JSON.stringify({ clientRequestId: crypto.randomUUID(), action: "revise", revisionRequest: feedbackText.trim() }),
-      });
+      const payload = { action: confirm ? "revise" : "review_revision", revisionRequest: feedbackText.trim(), baseVersion: legalCase.currentDraftVersion, ...(confirm ? { reviewId: revisionReview!.reviewId, confirmation: true } : {}) };
+      const signature = JSON.stringify(payload);
+      if (revisionAttempt.current?.signature !== signature) revisionAttempt.current = { signature, clientRequestId: createDraftRequestId() };
+      const response = await draftRequest(user, caseId, { ...payload, clientRequestId: revisionAttempt.current.clientRequestId });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Não foi possível gerar a nova versão.");
-      setFeedbackText("");
-      setSelectedDraftVersion(null);
-      await loadData();
+      if (!response.ok) {
+        if (data.error !== "REQUEST_ALREADY_RECEIVED") revisionAttempt.current = null;
+        throw new Error(data.message || "Não foi possível revisar a alteração.");
+      }
+      if (!confirm) {
+        if (typeof data.reviewId !== "string" || data.baseVersion !== legalCase.currentDraftVersion || typeof data.advice !== "string" || typeof data.ready !== "boolean" || !Array.isArray(data.questions) || !data.questions.every((item: unknown) => typeof item === "string") || typeof data.changeSummary !== "string") throw new Error("Não foi possível validar a orientação.");
+        setRevisionReview(data);
+        revisionAttempt.current = null;
+        await loadData();
+        return;
+      }
+      if (!Number.isInteger(data.version) || data.version <= legalCase.currentDraftVersion) throw new Error("Não foi possível confirmar a nova versão.");
+      await finishDraftRevision(data.version);
     } catch (error) {
       setErrorMessage(getFriendlyError(error));
     } finally {
+      revisionBusy.current = false;
+      setRevisingDraft(false);
       setSending(false);
     }
   };
@@ -360,15 +430,12 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
     setGeneratingDraft(true);
     setErrorMessage("");
     try {
-      const response = await fetch(`/api/cases/${caseId}/draft`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` },
-        body: JSON.stringify({ clientRequestId: crypto.randomUUID(), action: "generate" }),
-      });
+      const response = await draftRequest(user, caseId, { clientRequestId: createDraftRequestId(), action: "generate" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Não foi possível gerar a minuta.");
       setSelectedDraftVersion(null);
       await loadData();
+      if (evidences.length) await previewCompleteDocument(data.version, true);
     } catch (error) {
       setErrorMessage(getFriendlyError(error));
     } finally {
@@ -377,15 +444,40 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
   };
 
   const downloadPDF = async () => {
-    const currentDraft = drafts[0];
+    const currentDraft = drafts.find((item) => item.version === selectedDraftVersion) || drafts[0];
     if (!currentDraft) return;
 
     if (!legalCase) return;
-    generateDraftPdf(legalCase, currentDraft, evidences).save(`peticao-inicial-${caseId}-v${currentDraft.version}.pdf`);
+    if (evidences.length) {
+      try {
+        const currentUser = auth.currentUser || user;
+        if (!currentUser) throw new Error("Entre novamente para baixar o documento.");
+        const response = await retrieveDocument(currentUser, caseId, currentDraft.version, "pdf");
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement("a"); link.href = url; link.download = `peticao-inicial-${caseId}-v${currentDraft.version}-com-evidencias.pdf`;
+        document.body.appendChild(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      } catch (error) { setErrorMessage(getFriendlyError(error)); }
+      return;
+    }
+    generateDraftPdf(legalCase, currentDraft, exportEvidences(evidences)).save(`peticao-inicial-${caseId}-v${currentDraft.version}.pdf`);
   };
 
   const currentDraft = drafts.find((draft) => draft.version === selectedDraftVersion) || drafts[0];
+  const approvedDraft = legalCase ? drafts.find((draft) => draft.approved && draft.version === currentApprovedDraftVersion(legalCase)) : undefined;
   const newEvidenceAvailable = Boolean(currentDraft && evidences.some((evidence) => new Date(evidence.uploadedAt).getTime() > new Date(currentDraft.createdAt).getTime()));
+  const revisionProposalPanel = revisionReview && <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-slate-800" aria-live="polite">
+    <p className="font-semibold">Orientação preliminar do JurisBot — não substitui revisão por advogado</p>
+    <p className="font-semibold">Proposta — o documento ainda não foi alterado</p>
+    <p className="whitespace-pre-wrap break-words">{revisionReview.advice}</p>
+    {revisionReview.questions.map((question, index) => <p key={index}>{index + 1}. {question}</p>)}
+    {!revisionReview.ready && <p>{revisionInChat ? "Responda às perguntas no chat para continuar." : "Complemente a solicitação acima com as respostas e clique em Solicitar alteração novamente."} Nenhum documento foi alterado.</p>}
+    {revisionReview.ready && <>
+      <p className="font-semibold">Alteração proposta</p><p className="break-words">{revisionReview.changeSummary}</p>
+      {revisionReview.proposedClaimValue != null && <p>Valor da causa proposto: {revisionReview.proposedClaimValue.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>}
+      <p>Confirme somente se a proposta corresponde aos fatos e pedidos que você informou. Também pode escrever “Confirmo a alteração” no chat.</p>
+      <Button type="button" size="sm" className="w-full whitespace-normal" onClick={() => void handleRequestDraftChange(true)} loading={revisingDraft} disabled={sending || generatingDraft || buildingDocument || revisionReview.baseVersion !== legalCase?.currentDraftVersion}>Confirmar alteração e gerar nova versão</Button>
+    </>}
+  </div>;
 
   return (
     <div className="space-y-6 animate-fadeIn pb-8">
@@ -441,10 +533,27 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
         </div>
       </div>
 
+      {legalCase && profile?.role === "CITIZEN" && <SubmissionFlow
+        key={`${caseId}:${user?.uid}:${approvedDraft?.version || "none"}`}
+        ref={submissionFlowRef}
+        legalCase={legalCase}
+        approvedDraft={approvedDraft}
+        onRequestChange={() => {
+          setActiveTab("draft");
+          setSelectedDraftVersion(legalCase.currentDraftVersion || null);
+          setShowDraftModal(false);
+          window.requestAnimationFrame(() => {
+            const field = document.getElementById("draft-feedback");
+            field?.scrollIntoView({ behavior: "smooth", block: "center" });
+            field?.focus();
+          });
+        }}
+      />}
+
       {/* Main 2-Column Grid Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[680px]">
         {/* Left Column: Interactive Chat Box (7 cols) */}
-        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col h-full overflow-hidden">
+        <div className="min-w-0 lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col h-full overflow-hidden">
           {/* Chat Header */}
           <div className="p-4 border-b border-slate-100 bg-jus-petroleum text-white flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -520,15 +629,23 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
                 </div>
               );
             })}
+            {approvedDraft && profile?.role === "CITIZEN" && <div data-testid="jurisbot-submission-cta" className="space-y-3 rounded-2xl border border-jus-petroleum/20 bg-white p-4 text-xs text-slate-800">
+              <p className="font-bold text-jus-petroleum">JurisBot</p>
+              <p>Sua petição está aprovada. Você deseja realizar um envio de teste ou prefere buscar o auxílio de um advogado?</p>
+              <SubmissionActions onSend={() => submissionFlowRef.current?.start()} onLawyer={() => submissionFlowRef.current?.showLawyerInfo()} />
+              <p className="text-[11px] text-slate-600">Este envio não representa protocolo judicial real.</p>
+            </div>}
             {sending && (
               <div role="status" className="mx-auto rounded-xl border border-slate-200 bg-white px-3 py-2 text-center text-xs text-slate-700 shadow-sm">
                 JurisBot está analisando...
               </div>
             )}
+            {revisionInChat && revisionProposalPanel}
+            {revisionInChat && revisionNotice && <p role="status" className="rounded-lg border border-teal-200 bg-teal-50 p-3 text-xs text-teal-950">{revisionNotice}</p>}
             <div ref={chatEndRef} />
             {retryMessage && !sending && (
               <div role="alert" className="mx-auto flex max-w-[90%] items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
-                <span>Não consegui responder a essa mensagem. Tente novamente.</span>
+                <span className="min-w-0 break-words">{errorMessage || "Não consegui responder a essa mensagem. Tente novamente."}</span>
                 <button type="button" className="shrink-0 font-semibold underline" onClick={() => void handleRetryMessage()}>
                   Tentar novamente
                 </button>
@@ -540,10 +657,11 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
           <form onSubmit={handleSendMessage} className="p-3 bg-white border-t border-slate-200 flex items-center gap-2">
             <input
               type="text"
-              placeholder="Digite sua resposta ou dúvida ao JurisBot..."
+              placeholder={legalCase?.currentDraftVersion ? "Descreva a alteração ou confirme a proposta..." : "Digite sua resposta ou dúvida ao JurisBot..."}
+              maxLength={legalCase?.currentDraftVersion ? 2000 : 4000}
               value={inputMsg}
               onChange={(e) => setInputMsg(e.target.value)}
-              className="flex-1 bg-slate-100 border border-slate-200 rounded-full px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-jus-petroleum focus:bg-white transition-all"
+              className="min-w-0 flex-1 bg-slate-100 border border-slate-200 rounded-full px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-jus-petroleum focus:bg-white transition-all"
             />
             <Button
               type="submit"
@@ -560,7 +678,7 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
         </div>
 
         {/* Right Column: Case Control Panel (5 cols) */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col h-full overflow-hidden">
+        <div className="min-w-0 lg:col-span-5 bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col h-full overflow-hidden">
           {/* Navigation Tabs */}
           <div className="flex border-b border-slate-200 bg-slate-50">
             <button
@@ -617,14 +735,31 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
                     </div>
 
                     <div className="p-4 bg-slate-900 text-slate-100 rounded-2xl font-mono text-[11px] max-h-64 overflow-y-auto leading-relaxed border border-slate-800">
+                      <p className="mb-2 font-sans font-semibold">Prévia textual — os arquivos das evidências aparecem no documento completo abaixo.</p>
                       <pre className="whitespace-pre-wrap">{currentDraft.content}</pre>
                     </div>
 
-                    <div className="flex items-center gap-2 pt-2">
+                    {evidences.length > 0 && <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs text-slate-700">Confira a petição com as evidências anexadas e referenciadas antes de aprovar. Novas versões reutilizam os arquivos deste caso.</p>
+                      <Button variant="outline" size="sm" loading={buildingDocument} disabled={buildingDocument || generatingDraft || sending} onClick={() => void previewCompleteDocument(currentDraft.version)} className="w-full">{buildingDocument ? "Montando documento completo..." : "Visualizar documento completo com evidências"}</Button>
+                      {documentPreview?.caseId === caseId && documentPreview.version === currentDraft.version && <>
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-700">
+                          <Button variant="outline" size="sm" disabled={buildingDocument || documentPreview.page <= 1} onClick={() => void previewCompleteDocument(currentDraft.version, false, documentPreview.page - 1)}>Anterior</Button>
+                          <span>Página {documentPreview.page} de {documentPreview.pages}</span>
+                          <Button variant="outline" size="sm" disabled={buildingDocument || documentPreview.page >= documentPreview.pages} onClick={() => void previewCompleteDocument(currentDraft.version, false, documentPreview.page + 1)}>Próxima</Button>
+                          {!!documentPreview.firstAnnexPage && <Button variant="outline" size="sm" disabled={buildingDocument} onClick={() => void previewCompleteDocument(currentDraft.version, false, documentPreview.firstAnnexPage)}>Ver anexos das evidências</Button>}
+                        </div>
+                        <Image alt={`Petição completa, versão ${currentDraft.version}, página ${documentPreview.page} de ${documentPreview.pages}`} src={documentPreview.url} width={1000} height={1414} unoptimized className="h-auto w-full rounded-lg border border-slate-300 bg-white" />
+                        <p className="text-[11px] text-slate-600">Use Baixar PDF ou Baixar Word para obter o documento inteiro com os anexos.</p>
+                      </>}
+                    </div>}
+
+                    <div className="flex flex-wrap items-center gap-2 pt-2">
                       <Button
                         variant="primary"
                         size="sm"
                         onClick={handleApproveDraft}
+                        disabled={buildingDocument || generatingDraft || sending || currentDraft.version !== drafts[0]?.version || currentDraft.approved || newEvidenceAvailable}
                         icon={<CheckCircle2 className="w-4 h-4" />}
                         className="flex-1"
                       >
@@ -638,11 +773,17 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
                       >
                         Baixar PDF
                       </Button>
+                      {evidences.length > 0 && <Button variant="outline" size="sm" onClick={() => void downloadEvidenceDocx()} loading={generatingEvidenceDocx} icon={<Download className="w-4 h-4" />}>Baixar Word</Button>}
                     </div>
                     <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <label htmlFor="draft-feedback" className="block text-xs font-semibold text-slate-700">O que você gostaria que fosse corrigido?</label>
-                      <textarea id="draft-feedback" value={feedbackText} onChange={(event) => setFeedbackText(event.target.value)} maxLength={2000} rows={3} className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs" placeholder="Descreva a alteração sem adicionar fatos não confirmados." />
-                      <Button type="button" variant="outline" size="sm" onClick={handleRequestDraftChange} disabled={!feedbackText.trim() || sending}>Solicitar alteração</Button>
+                      <p className="text-xs text-slate-600">A alteração será feita na versão atual ({legalCase?.currentDraftVersion}). A versão aprovada e seus anexos serão preservados; a nova versão precisará de aprovação.</p>
+                      <textarea id="draft-feedback" value={feedbackText} disabled={sending || generatingDraft || buildingDocument} onChange={(event) => { setFeedbackText(event.target.value); setRevisionReview(null); setRevisionNotice(""); revisionAttempt.current = null; }} maxLength={2000} rows={3} className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs disabled:opacity-70" placeholder="Ex.: Quero alterar o valor da causa para R$ 3.000. Informe a composição dos valores e quais pedidos deseja corrigir." />
+                      <Button type="button" variant="outline" size="sm" onClick={() => void handleRequestDraftChange()} loading={revisingDraft} disabled={!feedbackText.trim() || sending || generatingDraft || buildingDocument}>Solicitar alteração</Button>
+                      {!revisionInChat && revisionProposalPanel}
+                      {!revisionInChat && revisionNotice && <p role="status" className="rounded-lg border border-teal-200 bg-teal-50 p-3 text-xs text-teal-950">{revisionNotice}</p>}
+                      {currentDraft.changeSummary && <p className="text-xs text-slate-700">Alterações desta versão: {currentDraft.changeSummary}</p>}
+                      {currentDraft.revisionAdvice && <p className="whitespace-pre-wrap break-words text-xs text-slate-700">Orientação preliminar registrada: {currentDraft.revisionAdvice}</p>}
                     </div>
                   </div>
                 ) : (
@@ -676,13 +817,20 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
                       <p className="text-xs font-bold text-slate-800">Pacote identificado: {packageManifest.evidenceCount} evidências</p>
                       <p className="text-[10px] text-slate-500">Fonte da ordem: {packageManifest.sourceIndexType}. JPG + PDF aparecem como uma única evidência lógica.</p>
                       <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
-                        {packageManifest.items.map((item) => <div key={item.id} className="flex items-start gap-2 rounded-lg border border-slate-100 p-2 text-[10px]"><span className="font-bold text-jus-petroleum w-8">{String(item.order).padStart(2, "0")}</span><span className="font-semibold text-slate-700 w-12">{item.reference}</span><span className="flex-1 text-slate-600">{item.title}<br /><span className="text-slate-400">{item.variants.length} formato(s) disponível(is)</span></span></div>)}
+                        {packageManifest.items.map((item) => <div key={item.id} className="space-y-1 rounded-lg border border-slate-100 p-2 text-[10px]">
+                          <div className="flex min-w-0 gap-2">
+                            <input aria-label={`Ordem de ${item.title}`} type="number" min={1} max={9999} value={item.order} disabled={packageProcessed} onChange={(event) => setPackageManifest({...packageManifest, items: packageManifest.items.map((value) => value.id === item.id ? {...value, order: Number(event.target.value)} : value)})} className="w-12 rounded border border-slate-300 p-1 text-slate-800" />
+                            <input aria-label={`Referência de ${item.title}`} maxLength={40} value={item.reference} disabled={packageProcessed} onChange={(event) => setPackageManifest({...packageManifest, items: packageManifest.items.map((value) => value.id === item.id ? {...value, reference: event.target.value} : value)})} className="w-16 rounded border border-slate-300 p-1 text-slate-800" />
+                            <input aria-label={`Título da evidência ${item.reference}`} maxLength={500} value={item.title} disabled={packageProcessed} onChange={(event) => setPackageManifest({...packageManifest, items: packageManifest.items.map((value) => value.id === item.id ? {...value, title: event.target.value} : value)})} className="min-w-0 flex-1 rounded border border-slate-300 p-1 text-slate-800" />
+                          </div>
+                          <span className="text-slate-500">{item.variants.length} formato(s). Ordem, referência e título são definidos por você; não podem repetir os já existentes no caso.</span>
+                        </div>)}
                       </div>
                       {packageManifest.warnings.length > 0 && <p className="text-[10px] text-amber-700">{packageManifest.warnings.join(" ")}</p>}
                       <Button type="button" variant="outline" size="sm" onClick={() => void downloadEvidenceDocx()} loading={generatingEvidenceDocx} disabled={!drafts[0]} icon={<Download className="h-4 w-4" />} className="w-full">{generatingEvidenceDocx ? "Montando Word..." : "Baixar Word com evidências"}</Button>
-                      <p className="text-[10px] leading-relaxed text-slate-500">O Word usa os JPGs na ordem e com os títulos informados no CSV. As imagens não são enviadas à OpenAI e os PDFs equivalentes não são duplicados.</p>
+                      <p className="text-[10px] leading-relaxed text-slate-500">Confirme primeiro a inclusão das evidências. O documento completo usa imagens e páginas de PDFs preservadas no caso, na ordem informada. A montagem em Python não chama OpenAI nem duplica JPG/PDF equivalentes.</p>
                       <div className="flex gap-2"><Button type="button" variant="primary" size="sm" onClick={() => void processPackage()} loading={processingPackage} disabled={packageProcessed} className="flex-1">{packageProcessed ? "Evidências adicionadas" : "Confirmar e analisar"}</Button><Button type="button" variant="ghost" size="sm" onClick={() => { setPackageManifest(null); setZipFile(null); setPackageProcessed(false); }}>Cancelar</Button></div>
-                      <p className="text-[10px] leading-relaxed text-slate-500">Os arquivos são analisados durante esta sessão. Enquanto o armazenamento permanente não estiver disponível, o caso preservará apenas as informações extraídas e a organização das evidências.</p>
+                      <p className="text-[10px] leading-relaxed text-slate-500">Os originais ficam preservados de forma privada neste ambiente local para compor os anexos nas próximas versões. Isso não representa análise visual pela IA nem armazenamento durável de uma implantação pública.</p>
                     </div>
                   )}
                   {errorMessage && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-2 text-[10px] text-red-800">{errorMessage}</p>}
@@ -721,7 +869,7 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
                     {uploading ? `Enviando ${uploadProgress}%` : "Enviar evidência"}
                   </Button>
                   {uploading && <UploadProgress progress={uploadProgress} />}
-                  <p className="text-[10px] leading-relaxed text-slate-500">Neste momento, o arquivo é analisado para auxiliar o JurisBot, mas o original não fica armazenado no JusFácil.</p>
+                  <p className="text-[10px] leading-relaxed text-slate-500">O original fica preservado neste ambiente local. JPG, PNG e todas as páginas de PDFs podem integrar o documento completo; PDF digitalizado sem texto não é tratado como analisado pela IA.</p>
                 </form>
 
                 <div className="space-y-2">
@@ -781,7 +929,7 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
             <div className="p-5 bg-jus-petroleum text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-jus-caramel-light" />
-                <h3 className="font-bold text-sm">Visualização Completa da Minuta</h3>
+                <h3 className="font-bold text-sm">Prévia textual da minuta</h3>
               </div>
               <button
                 onClick={() => setShowDraftModal(false)}
@@ -806,6 +954,7 @@ export default function JurisBotChatClient({ caseId }: { caseId: string }) {
                 <Button
                   variant="primary"
                   size="sm"
+                  disabled={buildingDocument || generatingDraft || sending || currentDraft.version !== drafts[0]?.version || currentDraft.approved || newEvidenceAvailable}
                   onClick={() => {
                     handleApproveDraft();
                     setShowDraftModal(false);

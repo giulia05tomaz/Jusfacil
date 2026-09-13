@@ -8,6 +8,8 @@ import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { logger } from "@/lib/logger";
 import { isAuthorizedForCase } from "@/lib/security/caseAuthorization";
 import { checkChatRateLimit } from "@/lib/security/inMemoryRateLimit";
+import { POST as draftPost } from "@/app/api/cases/[caseId]/draft/route";
+import { isRevisionConfirmation, revisionAdviceMessage, RevisionProposalSchema } from "@/lib/drafts/revisionShared";
 import type { LegalCase, StructuredCaseData, UserProfile } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -82,6 +84,40 @@ export async function POST(request: Request) {
     const legalCase = caseSnapshot.data() as LegalCase;
     const user = userSnapshot.data() as UserProfile;
     if (!isAuthorizedForCase(uid, user, legalCase)) return errorResponse("FORBIDDEN", "Você não tem acesso a este caso.", 403);
+    // Após a primeira minuta, o chat é uma entrada do MESMO fluxo de revisão.
+    // Uma resposta de triagem nunca é tratada como documento alterado.
+    if (legalCase.currentDraftVersion) {
+      // Conserva a versão-base/proposta no retry, mesmo após a versão avançar.
+      const dispatchRef = caseSnapshot.ref.collection("revisionChatRequests").doc(parsed.data.clientMessageId);
+      const priorDispatch = await dispatchRef.get();
+      const savedDispatch = priorDispatch.data();
+      if (priorDispatch.exists && (savedDispatch?.createdBy !== uid || savedDispatch?.message !== parsed.data.message)) return errorResponse("IDEMPOTENCY_CONFLICT", "O identificador já pertence a outra solicitação.", 409);
+      let payload: Record<string, unknown> = { clientRequestId: parsed.data.clientMessageId, action: "review_revision", revisionRequest: parsed.data.message, baseVersion: legalCase.currentDraftVersion };
+      if (priorDispatch.exists) payload = savedDispatch!.payload;
+      else if (isRevisionConfirmation(parsed.data.message)) {
+        const history = await caseSnapshot.ref.collection("messages").orderBy("timestamp", "desc").limit(20).get();
+        const proposals = history.docs.map(item => item.data()).filter(item => item.createdBy === uid).map(item => RevisionProposalSchema.safeParse(item.revisionReview));
+        const latest = proposals.find(item => item.success && item.data.baseVersion === legalCase.currentDraftVersion);
+        if (!latest?.success || !latest.data.ready || latest.data.questions.length) return errorResponse("REVISION_NOT_READY", "Ainda não há uma proposta pronta para confirmar. Esclareça a alteração primeiro.", 409);
+        payload = { ...payload, action: "revise", revisionRequest: latest.data.revisionRequest, reviewId: latest.data.reviewId, confirmation: true };
+      }
+      const dispatch = await adminDb.runTransaction(async transaction => {
+        const existing = await transaction.get(dispatchRef);
+        if (existing.exists) return existing.data()!;
+        const record = { createdBy: uid, message: parsed.data.message, payload, createdAt: new Date() };
+        transaction.set(dispatchRef, record);
+        return record;
+      });
+      if (dispatch.createdBy !== uid || dispatch.message !== parsed.data.message) return errorResponse("IDEMPOTENCY_CONFLICT", "O identificador já pertence a outra solicitação.", 409);
+      payload = dispatch.payload;
+      logger.info("jurisbot_revision_dispatch", { action: String(payload.action), baseVersion: legalCase.currentDraftVersion });
+      const result = await draftPost(new Request(request.url, { method: "POST", headers: { Authorization: authHeader, "Content-Type": "application/json" }, body: JSON.stringify(payload) }), { params: Promise.resolve({ caseId: parsed.data.caseId }) });
+      const output = await result.json();
+      if (!result.ok) return NextResponse.json(output, { status: result.status, headers: result.headers });
+      const review = RevisionProposalSchema.safeParse(output);
+      if (review.success) return NextResponse.json({ ...output, revisionReview: review.data, reply: revisionAdviceMessage(review.data) });
+      return NextResponse.json({ ...output, reply: `Texto da versão ${output.version} salvo para revisão. A aplicação irá montar o documento completo com as evidências. Nenhum e-mail foi enviado.` });
+    }
     responseMessageRef = caseSnapshot.ref.collection("messages").doc(`ai_${parsed.data.clientMessageId}`);
     const priorResponse = await responseMessageRef.get();
     if (priorResponse.exists) {
