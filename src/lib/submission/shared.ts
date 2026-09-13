@@ -9,6 +9,7 @@ export const SubmissionRequestSchema = z.object({
   copyEmail: CopyEmailSchema,
   acknowledgment: z.literal(true),
   idempotencyKey: z.uuid(),
+  replyToSubmissionId: z.uuid().optional(),
 }).strict();
 
 export type SubmissionRequest = z.infer<typeof SubmissionRequestSchema>;
@@ -23,6 +24,8 @@ export interface TestEmailSubmission {
   createdAt: string;
   sentAt?: string;
   errorCode?: string;
+  replyToSubmissionId?: string;
+  replyToDraftVersion?: number;
 }
 
 export function currentApprovedDraftVersion(legalCase: {

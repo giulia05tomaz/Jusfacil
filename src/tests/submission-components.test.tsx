@@ -48,6 +48,18 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("jornada de teste do cidadão — zero e-mails reais", () => {
+  it("seleciona conversa anterior, confirma a versão e envia somente o ID do histórico", async () => {
+    const parentKey = "33333333-3333-4333-8333-333333333333";
+    state.history = [{ ...submission, submissionId: parentKey, draftId: "v1", draftVersion: 1 }];
+    state.post.mockImplementation(async (_url: string, options: RequestInit) => {
+      const input = JSON.parse(options.body as string); return new Response(JSON.stringify({ submission: { ...submission, replyToSubmissionId: input.replyToSubmissionId, replyToDraftVersion: 1 } }), { status: 200 });
+    });
+    renderFlow(); await screen.findByText("Enviado"); start(); fireEvent.click(screen.getByRole("button", { name: "Não, continuar" }));
+    expect(screen.getByLabelText("Conversa do e-mail")).toHaveValue(parentKey);
+    fireEvent.click(screen.getByRole("button", { name: "Continuar para confirmação" })); expect(screen.getByText("Resposta ao envio da Versão 1")).toBeVisible();
+    fireEvent.click(screen.getByLabelText(TEST_SUBMISSION_ACKNOWLEDGMENT)); fireEvent.click(screen.getByRole("button", { name: "Confirmar envio de teste" }));
+    await screen.findByText("✓ Envio de teste realizado"); const input = JSON.parse(state.post.mock.calls[0][1].body); expect(input.replyToSubmissionId).toBe(parentKey); expect(input.headers).toBeUndefined(); expect(input.to).toBeUndefined();
+  });
   it("CTA persistente só aparece para a versão atualmente aprovada", async () => {
     const view = render(<SubmissionFlow legalCase={{ ...legalCase, status: "AGUARDANDO_REVISAO", currentDraftVersion: 3 }} approvedDraft={draft} onRequestChange={vi.fn()} />);
     expect(screen.queryByRole("button", { name: "Enviar para o fórum" })).not.toBeInTheDocument();

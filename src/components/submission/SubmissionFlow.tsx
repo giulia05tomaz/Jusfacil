@@ -34,10 +34,14 @@ export const SubmissionFlow = forwardRef<SubmissionFlowHandle, Props>(function S
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<TestEmailSubmission | null>(null);
   const [reusedResult, setReusedResult] = useState(false);
+  const [replySelection, setReplySelection] = useState<string | null>(null);
   const sendingRef = useRef(false);
   const sectionRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const hasApproved = Boolean(approvedDraft?.approved && approvedDraft.caseId === legalCase.caseId && approvedDraft.version === currentApprovedDraftVersion(legalCase));
+  const previousSent = history.filter((item) => item.status === "SENT" && item.draftVersion < (approvedDraft?.version || 0)).sort((a, b) => b.draftVersion - a.draftVersion);
+  const replyToSubmissionId = replySelection === null ? previousSent[0]?.submissionId : replySelection || undefined;
+  const replyParent = previousSent.find((item) => item.submissionId === replyToSubmissionId);
 
   const fetchHistory = useCallback(async (signal?: AbortSignal): Promise<TestEmailSubmission[]> => {
     if (!user) return [];
@@ -79,6 +83,7 @@ export const SubmissionFlow = forwardRef<SubmissionFlowHandle, Props>(function S
     setError("");
     setResult(null);
     setReusedResult(false);
+    setReplySelection(null);
     moveTo("change");
     sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -110,13 +115,13 @@ export const SubmissionFlow = forwardRef<SubmissionFlowHandle, Props>(function S
     try {
       const response = await submissionRequest(user, legalCase.caseId, {
         method: "POST",
-        body: JSON.stringify({ approvedDraftId: `v${approvedDraft.version}`, copyEmail: parsedEmail.data, acknowledgment: true, idempotencyKey: createSubmissionKey() }),
+        body: JSON.stringify({ approvedDraftId: `v${approvedDraft.version}`, copyEmail: parsedEmail.data, acknowledgment: true, idempotencyKey: createSubmissionKey(), ...(replyToSubmissionId ? { replyToSubmissionId } : {}) }),
       });
       const data = await response.json();
       // Defesa contra resposta antiga/inconsistente: SENT de outro CC não é sucesso desta confirmação.
       if (data.submission && (data.submission.status === "SENT" || data.submission.status === "PENDING") &&
         (data.submission.draftId !== `v${approvedDraft.version}` || data.submission.draftVersion !== approvedDraft.version ||
-          typeof data.submission.copyEmail !== "string" || data.submission.copyEmail.trim().toLowerCase() !== parsedEmail.data.toLowerCase())) {
+          typeof data.submission.copyEmail !== "string" || data.submission.copyEmail.trim().toLowerCase() !== parsedEmail.data.toLowerCase() || (data.submission.replyToSubmissionId || "") !== (replyToSubmissionId || ""))) {
         throw new Error("O servidor retornou um envio anterior com outra versão ou e-mail de cópia. Nenhum novo envio foi confirmado para o endereço informado. Consulte o histórico.");
       }
       if (data.submission) {
@@ -164,6 +169,14 @@ export const SubmissionFlow = forwardRef<SubmissionFlowHandle, Props>(function S
       </div>}
       {step === "email" && <form onSubmit={confirmEmail} className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
         <Input id="submission-copy-email" label="E-mail para receber uma cópia" type="email" value={copyEmail} onChange={(event) => setCopyEmail(event.target.value)} maxLength={254} required autoComplete="email" />
+        {previousSent.length > 0 && <div className="space-y-2 text-sm text-slate-800">
+          <label htmlFor="submission-reply-parent" className="block font-semibold">Conversa do e-mail</label>
+          <select id="submission-reply-parent" value={replyToSubmissionId || ""} onChange={(event) => { setReplySelection(event.target.value); setAcknowledgment(false); setError(""); }} className="w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-800 focus:outline-jus-petroleum">
+            {previousSent.map((item) => <option key={item.submissionId} value={item.submissionId}>Responder ao envio da Versão {item.draftVersion}</option>)}
+            <option value="">Enviar como novo e-mail</option>
+          </select>
+          <p className="text-xs text-slate-600">Escolha o envio anterior que receberá esta atualização. O agrupamento da conversa depende do aplicativo de e-mail.</p>
+        </div>}
         <div className="flex flex-col gap-2 sm:flex-row"><Button type="button" variant="ghost" onClick={() => moveTo("change")}>Voltar</Button><Button type="submit">Continuar para confirmação</Button></div>
       </form>}
       {step === "confirm" && <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -171,6 +184,7 @@ export const SubmissionFlow = forwardRef<SubmissionFlowHandle, Props>(function S
           <div><dt className="font-semibold">Documento</dt><dd>Petição Inicial — Versão {approvedDraft!.version}</dd></div>
           <div><dt className="font-semibold">Destino</dt><dd>Ambiente de testes JusFácil</dd></div>
           <div><dt className="font-semibold">Cópia</dt><dd className="break-all">{copyEmail}</dd></div>
+          <div><dt className="font-semibold">Conversa</dt><dd>{replyParent ? `Resposta ao envio da Versão ${replyParent.draftVersion}` : "Novo e-mail"}</dd></div>
         </dl>
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{TEST_SUBMISSION_DISCLAIMER}</p>
         <label className="flex items-start gap-3 text-sm text-slate-800"><input type="checkbox" checked={acknowledgment} onChange={(event) => setAcknowledgment(event.target.checked)} disabled={sending || result?.status === "SENT" || result?.status === "PENDING"} className="mt-1 h-4 w-4 shrink-0 accent-jus-petroleum" /><span>{TEST_SUBMISSION_ACKNOWLEDGMENT}</span></label>
@@ -191,7 +205,7 @@ export const SubmissionFlow = forwardRef<SubmissionFlowHandle, Props>(function S
       <h3 className="text-sm font-bold text-jus-petroleum">Histórico de envios</h3>
       {historyError && <div role="alert" className="text-xs text-red-800">{historyError}<button type="button" className="ml-2 underline" onClick={() => { void fetchHistory().then((items) => { setHistory(items); setHistoryError(""); }).catch((reason: Error) => setHistoryError(reason.message)); }}>Atualizar histórico</button></div>}
       <ul className="space-y-2">{history.map((item) => <li key={item.submissionId} className="flex flex-col justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 sm:flex-row sm:items-center">
-        <div className="min-w-0"><p className="font-semibold">Envio de teste — Petição Inicial — Versão {item.draftVersion}</p><p>{item.createdAt ? new Date(item.createdAt).toLocaleString("pt-BR") : "Data indisponível"}</p><p className="break-all">E-mail de cópia: {item.copyEmail}</p></div>
+        <div className="min-w-0"><p className="font-semibold">Envio de teste — Petição Inicial — Versão {item.draftVersion}</p>{item.replyToDraftVersion && <p>Resposta ao envio da Versão {item.replyToDraftVersion}</p>}<p>{item.createdAt ? new Date(item.createdAt).toLocaleString("pt-BR") : "Data indisponível"}</p><p className="break-all">E-mail de cópia: {item.copyEmail}</p></div>
         <span className={`font-semibold ${item.status === "SENT" ? "text-emerald-800" : item.status === "FAILED" ? "text-red-800" : "text-slate-700"}`}>{item.status === "SENT" ? "Enviado" : item.status === "FAILED" ? "Falhou" : "Em processamento"}</span>
       </li>)}</ul>
       <p className="text-xs text-slate-600">Este envio não representa protocolo judicial real.</p>

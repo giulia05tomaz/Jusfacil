@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { DocumentData, Firestore } from "firebase-admin/firestore";
-import { EmailProviderError, sendEmail } from "@/lib/email/sendEmail";
+import { EmailProviderError, EmailThreadSchema, getSentEmailMessageId, sendEmail, type EmailThread } from "@/lib/email/sendEmail";
 import { generateDraftPdf } from "@/lib/pdf/generateDraftPdf";
 import { draftNeedsEvidenceRevision, exportEvidences, STALE_DRAFT_MESSAGE } from "@/lib/drafts/evidenceExport";
 import { CopyEmailSchema, currentApprovedDraftVersion, TEST_SUBMISSION_DISCLAIMER, type SubmissionRequest, type TestEmailSubmission } from "./shared";
@@ -35,6 +35,7 @@ export function publicSubmission(id: string, data: DocumentData): TestEmailSubmi
     createdAt: iso(data.createdAt),
     ...(data.sentAt ? { sentAt: iso(data.sentAt) } : {}),
     ...(data.errorCode ? { errorCode: data.errorCode } : {}),
+    ...(data.replyToSubmissionId ? { replyToSubmissionId: data.replyToSubmissionId, replyToDraftVersion: data.replyToDraftVersion } : {}),
   };
 }
 
@@ -69,6 +70,7 @@ export async function submitTestEmail(db: Firestore, uid: string, caseId: string
   // Esta coleção não é acessível pelo SDK do browser nas regras existentes.
   const lockRef = caseRef.collection("submissionLocks").doc(input.approvedDraftId);
   const createdAt = new Date();
+  const baseSubject = `[JusFácil — TESTE] Petição Inicial — ${caseId}`;
   const reservation = await db.runTransaction(async (transaction) => {
     const [caseSnapshot, draftSnapshot, previousSnapshot, lockSnapshot, userSnapshot] = await Promise.all([
       transaction.get(caseRef), transaction.get(draftRef), transaction.get(submissionRef), transaction.get(lockRef),
@@ -82,7 +84,10 @@ export async function submitTestEmail(db: Firestore, uid: string, caseId: string
     const legalCase = caseSnapshot.data()!;
     const draft = draftSnapshot.data()!;
     validateDocument(uid, caseId, input.approvedDraftId, legalCase, draft);
-    const fingerprint = hash(JSON.stringify([uid, caseId, input.approvedDraftId, draft.content, input.copyEmail, recipient.data, process.env.RESEND_FROM?.trim() || ""]));
+    const fingerprintParts = [uid, caseId, input.approvedDraftId, draft.content, input.copyEmail, recipient.data, process.env.RESEND_FROM?.trim() || ""];
+    // Preserva os fingerprints anteriores para requests sem resposta encadeada.
+    if (input.replyToSubmissionId) fingerprintParts.push(input.replyToSubmissionId);
+    const fingerprint = hash(JSON.stringify(fingerprintParts));
     const previous = previousSnapshot.data();
     if (previous) {
       if (previous.fingerprint !== fingerprint) throw new SubmissionError("IDEMPOTENCY_CONFLICT", 409, "Esta chave já foi usada para outra confirmação.");
@@ -100,7 +105,16 @@ export async function submitTestEmail(db: Firestore, uid: string, caseId: string
           ? "Esta versão já foi enviada com outro e-mail de cópia. Nenhum novo e-mail foi enviado para o endereço informado. Consulte o histórico."
           : "Esta versão já possui um envio em processamento com outro e-mail de cópia. Nenhum novo envio foi iniciado para o endereço informado. Aguarde o histórico.");
       }
+      if ((existing.data()!.replyToSubmissionId || "") !== (input.replyToSubmissionId || "")) throw new SubmissionError("SUBMISSION_THREAD_CONFLICT", 409, "Esta versão já possui um envio. Não é possível movê-lo para outra conversa nem reenviar a mesma versão. Consulte o histórico.");
       return { send: false as const, submission: publicSubmission(existing.id, existing.data()!), status: lock.status === "PENDING" ? 202 : 200 };
+    }
+    let parent: DocumentData | null = null;
+    if (input.replyToSubmissionId) {
+      const parentSnapshot = await transaction.get(caseRef.collection("submissions").doc(input.replyToSubmissionId));
+      parent = parentSnapshot.data() || null;
+      if (!parent || parent.createdBy !== uid || parent.type !== "TEST_EMAIL" || parent.recipientMode !== "TEST" || parent.status !== "SENT" || parent.provider !== "resend" || !Number.isInteger(parent.draftVersion) || parent.draftVersion >= draft.version || parent.draftId !== `v${parent.draftVersion}` || typeof parent.providerMessageId !== "string") throw new SubmissionError("SUBMISSION_REPLY_INVALID", 409, "Selecione um envio concluído de uma versão anterior deste mesmo caso.");
+      if (parent.thread && !EmailThreadSchema.safeParse(parent.thread).success) throw new SubmissionError("SUBMISSION_REPLY_INVALID", 409, "A conversa anterior precisa ser verificada antes do envio.");
+      if (parent.emailSubject && parent.emailSubject !== baseSubject && parent.emailSubject !== `Re: ${baseSubject}`) throw new SubmissionError("SUBMISSION_REPLY_INVALID", 409, "A conversa anterior não corresponde a este caso.");
     }
     // Uma exportação Word isolada não cria nem aprova uma nova versão jurídica.
     // O índice é obtido no servidor, dentro da mesma reserva, não pelo browser.
@@ -130,11 +144,13 @@ export async function submitTestEmail(db: Firestore, uid: string, caseId: string
       createdBy: uid, createdAt, acknowledgment: true, fingerprint, evidenceFingerprint, evidenceIndex: evidences, provider: "resend",
       copyRecipientDeduplicated: input.copyEmail.toLowerCase() === recipient.data.toLowerCase(),
       artifactFingerprint, ...(artifact ? { completeArtifactId: artifact.id, attachedPdfHash: artifact.pdfHash, attachedImageCount: artifact.imageCount } : {}),
+      emailSubject: parent ? `Re: ${baseSubject}` : baseSubject,
+      ...(parent ? { replyToSubmissionId: input.replyToSubmissionId!, replyToDraftVersion: parent.draftVersion } : {}),
     };
     transaction.set(submissionRef, data);
     const priorDeliveryUncertain = Boolean(lock?.deliveryUncertain);
     transaction.set(lockRef, { status: "PENDING", submissionId: submissionRef.id, fingerprint, evidenceFingerprint, artifactFingerprint, deliveryCreatedAt, deliveryUncertain: priorDeliveryUncertain });
-    return { send: true as const, legalCase, draft, evidences, records, artifact, artifactFingerprint, data, fingerprint, evidenceFingerprint, priorDeliveryUncertain };
+    return { send: true as const, legalCase, draft, evidences, records, artifact, artifactFingerprint, data, fingerprint, evidenceFingerprint, priorDeliveryUncertain, parent, frozenThread: lock?.fingerprint === fingerprint ? lock.thread : undefined };
   });
   if (!reservation.send) return {
     status: reservation.status, submission: reservation.submission, idempotent: true,
@@ -144,6 +160,7 @@ export async function submitTestEmail(db: Firestore, uid: string, caseId: string
   };
 
   let providerMessageId: string;
+  let thread: EmailThread | undefined;
   try {
     const draft = { ...reservation.draft, createdAt: iso(reservation.draft.createdAt) } as DraftVersion;
     const deliveryFingerprint = hash(`${reservation.fingerprint}:${reservation.evidenceFingerprint}${reservation.artifact ? `:${reservation.artifactFingerprint}` : ""}`);
@@ -161,9 +178,29 @@ export async function submitTestEmail(db: Firestore, uid: string, caseId: string
     if (content.length < 5 || content.length > 8 * 1024 * 1024 || content.subarray(0, 5).toString() !== "%PDF-") {
       throw new EmailProviderError("PDF_INVALID");
     }
-    const text = `Olá,\n\nEste e-mail foi gerado pelo ambiente de testes do JusFácil.\n\nDocumento:\nPetição Inicial — Versão ${draft.version}\n\nProtocolo interno JusFácil:\n${caseId}\n\nO PDF da versão aprovada está anexado.\n\nIMPORTANTE:\n${TEST_SUBMISSION_DISCLAIMER}\n\nJusFácil`;
+    if (reservation.parent) {
+      if (reservation.frozenThread) {
+        const parsed = EmailThreadSchema.safeParse(reservation.frozenThread);
+        if (!parsed.success) throw new EmailProviderError("EMAIL_THREAD_UNAVAILABLE");
+        thread = parsed.data;
+      } else {
+        const messageId = await getSentEmailMessageId(reservation.parent.providerMessageId, reservation.parent.emailSubject || baseSubject);
+        const references = [...new Set([...(reservation.parent.thread?.references || []), messageId])];
+        const parsed = EmailThreadSchema.safeParse({ inReplyTo: messageId, references });
+        if (!parsed.success) throw new EmailProviderError("EMAIL_THREAD_UNAVAILABLE");
+        thread = parsed.data;
+      }
+      // Congela os cabeçalhos antes da entrega para que retries usem o mesmo payload.
+      await db.runTransaction(async (transaction) => {
+        transaction.update(submissionRef, { thread });
+        transaction.update(lockRef, { thread });
+      });
+    }
+    const updateNote = reservation.parent ? `\n\nEsta versão atualizada substitui a Versão ${reservation.parent.draftVersion} enviada anteriormente nesta conversa.` : "";
+    const text = `Olá,\n\nEste e-mail foi gerado pelo ambiente de testes do JusFácil.\n\nDocumento:\nPetição Inicial — Versão ${draft.version}\n\nProtocolo interno JusFácil:\n${caseId}\n\nO PDF da versão aprovada está anexado.${updateNote}\n\nIMPORTANTE:\n${TEST_SUBMISSION_DISCLAIMER}\n\nJusFácil`;
     ({ providerMessageId } = await sendEmail({
-      to: recipient.data, cc: input.copyEmail, subject: `[JusFácil — TESTE] Petição Inicial — ${caseId}`,
+      to: recipient.data, cc: input.copyEmail, subject: reservation.data.emailSubject,
+      ...(thread ? { thread } : {}),
       text, html: `<div style="font-family:Arial,sans-serif;white-space:pre-wrap">${escapeHtml(text)}</div>`,
       attachments: [{ filename: `peticao-inicial-${caseId}-v${draft.version}.pdf`, contentType: "application/pdf", content }],
       idempotencyKey: `jusfacil-test-${deliveryFingerprint}`,
@@ -174,7 +211,7 @@ export async function submitTestEmail(db: Firestore, uid: string, caseId: string
       transaction.update(submissionRef, { status: "FAILED", failedAt: new Date(), errorCode: safeError.code });
       transaction.update(lockRef, { status: "FAILED", deliveryUncertain: safeError.deliveryUncertain || reservation.priorDeliveryUncertain });
     });
-    return { status: safeError.code === "EMAIL_NOT_CONFIGURED" ? 503 : 502, submission: publicSubmission(submissionRef.id, { ...reservation.data, status: "FAILED", errorCode: safeError.code }), error: safeError.code, message: safeError.code === "EMAIL_NOT_CONFIGURED" ? "O serviço de e-mail do JusFácil ainda não está configurado. Nenhum documento foi enviado." : safeError.message };
+    return { status: safeError.code === "EMAIL_NOT_CONFIGURED" ? 503 : 502, submission: publicSubmission(submissionRef.id, { ...reservation.data, status: "FAILED", errorCode: safeError.code }), error: safeError.code, message: safeError.code === "EMAIL_THREAD_UNAVAILABLE" ? "Não foi possível vincular a resposta ao e-mail anterior. Nenhum novo e-mail foi enviado. Verifique a permissão de leitura da chave Resend e o histórico." : safeError.code === "EMAIL_NOT_CONFIGURED" ? "O serviço de e-mail do JusFácil ainda não está configurado. Nenhum documento foi enviado." : safeError.message };
   }
   const sentAt = new Date();
   // Se o provedor aceitou mas a gravação falhar, nunca chama o provedor novamente nessa tentativa.

@@ -17,6 +17,38 @@ export interface EmailMessage {
   html: string;
   attachments: { filename: string; contentType: "application/pdf"; content: Buffer }[];
   idempotencyKey: string;
+  thread?: EmailThread;
+}
+
+export const EmailThreadSchema = z.object({
+  inReplyTo: z.string().max(512).regex(/^<[^<>\s]+@[^<>\s]+>$/),
+  references: z.array(z.string().max(512).regex(/^<[^<>\s]+@[^<>\s]+>$/)).min(1).max(50),
+}).strict().refine((thread) => thread.references.at(-1) === thread.inReplyTo && thread.references.join(" ").length <= 4096);
+export type EmailThread = z.infer<typeof EmailThreadSchema>;
+
+// O ID retornado pelo envio é um UUID do Resend, não o Message-ID RFC do e-mail.
+// Consulta somente a mensagem vinculada pelo servidor ao histórico deste caso.
+export async function getSentEmailMessageId(providerId: string, expectedSubject: string): Promise<string> {
+  if (typeof window !== "undefined") throw new EmailProviderError("EMAIL_SERVER_ONLY");
+  if (process.env.FORUM_SUBMISSION_MODE !== "test") throw new EmailProviderError("SUBMISSION_MODE_DISABLED");
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  const from = process.env.RESEND_FROM?.trim() || "";
+  const fromAddress = from.match(/^[^<>\r\n]{1,80}<([^<>\r\n]+)>$/)?.[1] || from;
+  const recipient = CopyEmailSchema.safeParse(process.env.FORUM_TEST_RECIPIENT);
+  if (process.env.EMAIL_PROVIDER !== "resend" || !apiKey || !recipient.success || !CopyEmailSchema.safeParse(fromAddress).success || /[\r\n]/.test(from)) throw new EmailProviderError("EMAIL_NOT_CONFIGURED");
+  if (!z.uuid().safeParse(providerId).success) throw new EmailProviderError("EMAIL_THREAD_UNAVAILABLE");
+  try {
+    const result = await new ResendEmailProvider(apiKey).emails.get(providerId);
+    const parsed = z.object({ id: z.uuid(), message_id: z.string().max(512), subject: z.string().max(254), from: z.string().max(254), to: z.array(z.string()).max(1) }).safeParse(result.data);
+    if (result.error || !parsed.success) throw new Error("unavailable");
+    const email = parsed.data;
+    const sender = email.from.match(/<([^<>\r\n]+)>$/)?.[1] || email.from;
+    if (email.id !== providerId || email.subject !== expectedSubject || sender.toLowerCase() !== fromAddress.toLowerCase() || email.to.length !== 1 || email.to[0].toLowerCase() !== recipient.data.toLowerCase() || !EmailThreadSchema.safeParse({ inReplyTo: email.message_id, references: [email.message_id] }).success) throw new Error("mismatch");
+    return email.message_id;
+  } catch {
+    // Nunca transforma uma falha de consulta em um novo e-mail avulso.
+    throw new EmailProviderError("EMAIL_THREAD_UNAVAILABLE");
+  }
 }
 
 // O SDK atual registra respostas brutas em desenvolvimento. A fronteira pública
@@ -52,7 +84,7 @@ export async function sendEmail(message: EmailMessage): Promise<{ providerMessag
   if (process.env.EMAIL_PROVIDER !== "resend" || !apiKey || !CopyEmailSchema.safeParse(fromAddress.trim()).success || /[\r\n]/.test(from)) {
     throw new EmailProviderError("EMAIL_NOT_CONFIGURED");
   }
-  if (!CopyEmailSchema.safeParse(message.cc).success || !message.subject.includes("TESTE") || message.attachments.length !== 1) {
+  if (!CopyEmailSchema.safeParse(message.cc).success || !message.subject.includes("TESTE") || /[\r\n]/.test(message.subject) || message.subject.length > 254 || message.attachments.length !== 1 || (message.thread && !EmailThreadSchema.safeParse(message.thread).success)) {
     throw new EmailProviderError("EMAIL_MESSAGE_INVALID");
   }
   const attachment = message.attachments[0];
@@ -70,6 +102,7 @@ export async function sendEmail(message: EmailMessage): Promise<{ providerMessag
         subject: message.subject,
         text: message.text,
         html: message.html,
+        ...(message.thread ? { headers: { "In-Reply-To": message.thread.inReplyTo, "References": message.thread.references.join(" ") } } : {}),
         attachments: [{ filename: attachment.filename, content: attachment.content, contentType: attachment.contentType }],
       }, { idempotencyKey: message.idempotencyKey });
   } catch {

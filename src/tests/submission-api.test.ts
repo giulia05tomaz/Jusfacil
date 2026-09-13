@@ -4,12 +4,12 @@ import type { LegalCase, DraftVersion, Evidence } from "@/types";
 const state = vi.hoisted(() => ({
   docs: new Map<string, Record<string, unknown>>(),
   tail: Promise.resolve(),
-  verify: vi.fn(), send: vi.fn(), pdf: vi.fn(),
+  verify: vi.fn(), send: vi.fn(), pdf: vi.fn(), getMessageId: vi.fn(),
   artifactRead: vi.fn(),
   adminStatus: "configured", failFinalization: false,
 }));
 vi.mock("@/lib/firebase/admin", () => ({ getAdminConfigurationStatus: () => state.adminStatus, getAdminAuth: () => ({ verifyIdToken: state.verify }), getAdminDb: () => fakeDb }));
-vi.mock("@/lib/email/sendEmail", async (original) => ({ ...(await original<typeof import("@/lib/email/sendEmail")>()), sendEmail: (...args: unknown[]) => state.send(...args) }));
+vi.mock("@/lib/email/sendEmail", async (original) => ({ ...(await original<typeof import("@/lib/email/sendEmail")>()), sendEmail: (...args: unknown[]) => state.send(...args), getSentEmailMessageId: (...args: unknown[]) => state.getMessageId(...args) }));
 vi.mock("@/lib/pdf/generateDraftPdf", () => ({ generateDraftPdf: (...args: unknown[]) => state.pdf(...args) }));
 vi.mock("@/lib/drafts/completeArtifact", async (original) => ({ ...(await original<typeof import("@/lib/drafts/completeArtifact")>()), readCompleteArtifact: (...args: unknown[]) => state.artifactRead(...args) }));
 
@@ -51,6 +51,7 @@ beforeEach(async () => {
   vi.stubEnv("FORUM_SUBMISSION_MODE", "test"); vi.stubEnv("FORUM_TEST_RECIPIENT", "forum.qa@example.com"); vi.stubEnv("RESEND_FROM", "JusFacil <sender@example.com>");
   state.verify.mockResolvedValue({ uid: "citizen-a" });
   state.send.mockResolvedValue({ providerMessageId: "provider-qa-id" });
+  state.getMessageId.mockResolvedValue("<previous@resend.dev>");
   const actual = await vi.importActual<typeof import("@/lib/pdf/generateDraftPdf")>("@/lib/pdf/generateDraftPdf");
   state.pdf.mockImplementation((legalCase: LegalCase, draft: DraftVersion, evidences: Evidence[]) => actual.generateDraftPdf(legalCase, draft, evidences));
   state.docs.set("users/citizen-a", { role: "CITIZEN" });
@@ -61,6 +62,51 @@ beforeEach(async () => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("envio exclusivamente de teste — provedor mockado, zero e-mails reais", () => {
+  const parentKey = "33333333-3333-4333-8333-333333333333";
+  const parentProviderId = "44444444-4444-4444-8444-444444444444";
+  function addParent(changes: Record<string, unknown> = {}) {
+    state.docs.set(`cases/${caseId}/submissions/${parentKey}`, { type: "TEST_EMAIL", recipientMode: "TEST", status: "SENT", draftId: "v1", draftVersion: 1, createdBy: "citizen-a", provider: "resend", providerMessageId: parentProviderId, copyEmail: body.copyEmail, createdAt: "2026-09-11T00:00:00Z", ...changes });
+  }
+  it("responde ao envio anterior com PDF aprovado atual e Message-ID RFC, sem alterar o parent", async () => {
+    addParent(); const before = structuredClone(state.docs.get(`cases/${caseId}/submissions/${parentKey}`));
+    expect((await post({ replyToSubmissionId: parentKey })).status).toBe(200);
+    expect(state.getMessageId).toHaveBeenCalledWith(parentProviderId, `[JusFácil — TESTE] Petição Inicial — ${caseId}`);
+    expect(state.send.mock.calls[0][0]).toMatchObject({ subject: `Re: [JusFácil — TESTE] Petição Inicial — ${caseId}`, thread: { inReplyTo: "<previous@resend.dev>", references: ["<previous@resend.dev>"] }, text: expect.stringContaining("substitui a Versão 1") });
+    expect(state.send.mock.calls[0][0].attachments[0].filename).toContain("v2.pdf");
+    expect(stored()).toMatchObject({ status: "SENT", replyToSubmissionId: parentKey, replyToDraftVersion: 1, thread: { inReplyTo: "<previous@resend.dev>" } });
+    expect(state.docs.get(`cases/${caseId}/submissions/${parentKey}`)).toEqual(before);
+  });
+  it("preserva References da conversa e não duplica Re", async () => {
+    addParent({ emailSubject: `Re: [JusFácil — TESTE] Petição Inicial — ${caseId}`, thread: { inReplyTo: "<root@resend.dev>", references: ["<root@resend.dev>"] } });
+    await post({ replyToSubmissionId: parentKey }); expect(state.send.mock.calls[0][0].thread.references).toEqual(["<root@resend.dev>", "<previous@resend.dev>"]); expect(state.send.mock.calls[0][0].subject).not.toContain("Re: Re:");
+  });
+  it.each([{ status: "FAILED" }, { status: "PENDING" }, { createdBy: "citizen-b" }, { draftVersion: 2, draftId: "v2" }, { provider: "other" }, { emailSubject: "Other case" }])("parent inválido não consulta provedor nem envia %j", async (changes) => {
+    addParent(changes); expect((await post({ replyToSubmissionId: parentKey })).status).toBe(409); expect(state.getMessageId).not.toHaveBeenCalled(); expect(state.send).not.toHaveBeenCalled();
+  });
+  it("parent em outro caso ou inexistente é bloqueado", async () => {
+    addParent(); state.docs.set(`cases/JF-2026-OTHER/submissions/${parentKey}`, state.docs.get(`cases/${caseId}/submissions/${parentKey}`)!); state.docs.delete(`cases/${caseId}/submissions/${parentKey}`);
+    expect((await post({ replyToSubmissionId: parentKey })).status).toBe(409); expect(state.send).not.toHaveBeenCalled(); expect(state.getMessageId).not.toHaveBeenCalled();
+  });
+  it("browser não pode fornecer Message-ID, subject ou headers", async () => {
+    for (const changes of [{ headers: { "In-Reply-To": "attacker" } }, { messageId: "arbitrary" }, { subject: "arbitrary" }, { replyToSubmissionId: "../other" }]) expect((await post(changes)).status).toBe(400);
+    expect(state.send).not.toHaveBeenCalled(); expect(state.getMessageId).not.toHaveBeenCalled();
+  });
+  it("falha na referência persiste FAILED e nunca envia como e-mail novo", async () => {
+    addParent(); const { EmailProviderError } = await import("@/lib/email/sendEmail"); state.getMessageId.mockRejectedValue(new EmailProviderError("EMAIL_THREAD_UNAVAILABLE"));
+    const response = await post({ replyToSubmissionId: parentKey }); expect(response.status).toBe(502); expect(await response.json()).toMatchObject({ error: "EMAIL_THREAD_UNAVAILABLE" }); expect(stored().status).toBe("FAILED"); expect(state.send).not.toHaveBeenCalled();
+  });
+  it("resposta concorrente e replay geram apenas uma consulta e um envio", async () => {
+    addParent(); await Promise.all([post({ replyToSubmissionId: parentKey }), post({ replyToSubmissionId: parentKey, idempotencyKey: key2 })]); await post({ replyToSubmissionId: parentKey });
+    expect(state.send).toHaveBeenCalledOnce(); expect(state.getMessageId).toHaveBeenCalledOnce();
+  });
+  it("retry conserva headers congelados e tentativa FAILED anterior", async () => {
+    addParent(); state.send.mockRejectedValueOnce(new Error("timeout")); await post({ replyToSubmissionId: parentKey });
+    state.getMessageId.mockResolvedValue("<changed@resend.dev>"); await post({ replyToSubmissionId: parentKey, idempotencyKey: key2 });
+    expect(state.getMessageId).toHaveBeenCalledOnce(); expect(state.send.mock.calls[0][0]).toEqual(state.send.mock.calls[1][0]); expect(stored().status).toBe("FAILED");
+  });
+  it("não move nem reenvia uma versão SENT avulsa ao escolher resposta depois", async () => {
+    addParent(); await post(); const response = await post({ replyToSubmissionId: parentKey, idempotencyKey: key2 }); expect(response.status).toBe(409); expect(await response.json()).toMatchObject({ error: "SUBMISSION_THREAD_CONFLICT" }); expect(state.send).toHaveBeenCalledOnce(); expect(state.getMessageId).not.toHaveBeenCalled();
+  });
   it("401 sem token", async () => { expect((await post({}, null)).status).toBe(401); expect(state.send).not.toHaveBeenCalled(); });
   it("401 com token inválido", async () => { state.verify.mockRejectedValue(new Error("invalid")); expect((await post()).status).toBe(401); expect(state.send).not.toHaveBeenCalled(); });
   it("503 para Admin indisponível, sem disfarçar erro como sessão inválida", async () => { state.adminStatus = "not_configured"; expect((await post()).status).toBe(503); expect(state.send).not.toHaveBeenCalled(); });

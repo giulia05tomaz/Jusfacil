@@ -351,3 +351,63 @@ Também verificados: identidade visual preservada, checkbox habilitando/desabili
 5. Confirmar recebimento real no destino e na cópia. Sem acesso à caixa de entrada, registrar AGUARDANDO CONFIRMAÇÃO MANUAL; resposta do provedor não comprova recebimento.
 
 Nenhum commit, git add, push ou deploy realizado. Nenhum status jurídico do caso alterado por envio de teste. Nenhuma conta, chave, projeto, evidência, minuta ou dado QA foi excluído. Nenhuma alteração de billing.
+
+## Atualização — resposta ao envio anterior (13/09/2026)
+
+Esta seção registra a execução atual; as seções anteriores são histórico de validações anteriores.
+
+- Implementada escolha “Responder ao envio da Versão X”, com seleção inicial do envio SENT de uma versão anterior mais recente do caso. É possível escolher V2 mesmo após um envio avulso da V3.
+- O browser fornece somente `replyToSubmissionId`. O servidor valida cidadão, caso, aprovação atual e envio anterior concluído, antes de consultar o provedor. Não aceita destinatário, assunto ou cabeçalhos arbitrários do browser.
+- O UUID de envio do Resend não é usado como Message-ID RFC. O servidor consulta a mensagem anterior e valida Message-ID, remetente, destino e assunto antes de enviar a resposta.
+- A resposta utiliza `Re:`, `In-Reply-To` e `References`, segundo a [documentação oficial do Resend](https://resend.com/docs/dashboard/receiving/reply-to-emails). O [GET da mensagem enviada inclui message_id](https://resend.com/changelog/message-id-for-sent-emails).
+- Cabeçalhos são congelados no Firestore antes do envio e preservados em retry, junto à idempotência existente. O PDF continua sendo o artefato completo da versão atualmente aprovada, sem alterar anexos ou versões anteriores.
+- Falha na consulta bloqueia o envio: não há fallback para novo e-mail avulso.
+- Uma versão já SENT não é reenviada nem movida retroativamente para outra conversa. A interface informa conflito se a conversa escolhida não corresponde ao envio já realizado.
+
+THREAD REQUEST / SERVER VALIDATION: PASS — testes com mocks.
+
+THREAD HEADERS / REPLY SUBJECT: PASS — testes com mocks.
+
+THREAD SELECTION UI: PASS — conferência na página local autenticada; V2 e V1 aparecem como opções de resposta, sem clicar na confirmação final.
+
+IDEMPOTENCY / FROZEN RETRY / NO DUPLICATE SEND: PASS — testes com mocks.
+
+RESEND READ PERMISSION: FAIL — consulta real somente de leitura ao envio SENT da V2 retornou HTTP 401; classificação sanitizada confirmou restrição de chave somente para envio, não chave inválida. Nenhum valor de chave ou resposta bruta foi registrado.
+
+PENDÊNCIA: configurar manualmente uma chave Resend server-side que permita leitura de mensagens enviadas, além do envio (Full access, se essa for a opção da conta). Não ampliar permissões ou substituir credenciais automaticamente. Não comprar serviço, alterar billing ou recorrer a Gmail SMTP.
+
+NEW EMAIL SENT IN THIS EXECUTION: 0.
+
+EMAIL CONVERSATION E2E: NÃO VALIDADO — bloqueado pela permissão atual da chave. Após configuração, testar somente uma nova versão aprovada ainda não enviada, escolhendo o envio anterior desejado. O agrupamento final no Gmail depende do cliente e exige confirmação manual; o envio avulso da V3 já recebido não pode ser convertido retroativamente.
+
+OPENAI CALLS: 0.
+
+OPENAI COST: US$ 0.
+
+QUALITY: lint PASS (exit 0); typecheck PASS (exit 0); tests PASS (257 testes, 17 arquivos, exit 0); build PASS (exit 0).
+
+Nenhum e-mail foi disparado, nenhuma minuta ou submissão QA foi alterada, nenhuma credencial foi modificada e nenhum commit/push/deploy foi realizado nesta execução.
+
+### Permissão Resend corrigida com autorização (13/09/2026)
+
+A usuária autorizou a permissão de leitura e envio. A chave existente “JusFacil Local Development” foi editada na conta Resend existente de Sending access para Full access. Nenhuma chave foi criada, excluída, rotacionada ou revelada. O mesmo segredo já configurado no `.env.local` foi preservado; não foi necessário editar o ambiente nem reiniciar o servidor.
+
+RESEND READ PERMISSION: PASS — consulta real exclusivamente de leitura da mensagem SENT da V2 retornou HTTP 200. Message-ID RFC presente, assunto correspondente ao caso, remetente correspondente à configuração e destinatário principal correspondente ao destinatário QA configurado. O bloqueio HTTP 401 registrado acima foi resolvido.
+
+EMAIL CONVERSATION E2E: NÃO VALIDADO — nenhum envio real nesta etapa. A próxima versão aprovada ainda não enviada poderá escolher “Responder ao envio da Versão 2”. Confirmar manualmente o agrupamento no Gmail, a versão correta e o PDF com evidências. A V3 já SENT permanece intacta e não será reenviada automaticamente.
+
+EMAILS SENT IN THIS STEP: 0.
+
+OPENAI CALLS: 0.
+
+OPENAI COST: US$ 0.
+
+Sem alterações de código nesta etapa. Quality gates da implementação imediatamente anterior: lint PASS, typecheck PASS, 257 testes em 17 arquivos PASS, build PASS. Não foram reexecutados nesta etapa exclusivamente de permissão e documentação.
+
+Nenhuma alteração de billing/plano, Firebase, minutas ou submissões; nenhum commit/push/deploy.
+
+### Confirmação manual da usuária e publicação (13/09/2026)
+
+EMAIL CONVERSATION E2E: PASS — confirmação manual da usuária: “Deu certo”, após a configuração de leitura e envio para responder à conversa anterior. Não houve novo disparo pelo agente para repetir o teste. Esta confirmação valida o comportamento relatado; não representa uma inspeção automática da caixa de entrada nem uma nova conferência do conteúdo do anexo pelo agente.
+
+A usuária solicitou publicar esta versão no repositório GitHub existente. A publicação inclui a implementação de resposta ao envio anterior, seus testes mockados e este relatório. Credenciais, ambiente local, arquivos de evidências, artefatos privados e scripts de diagnóstico QA ficam fora do commit.

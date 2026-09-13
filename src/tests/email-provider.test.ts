@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { sendEmail } from "@/lib/email/sendEmail";
+import { getSentEmailMessageId, sendEmail } from "@/lib/email/sendEmail";
 
-const sdk = vi.hoisted(() => ({ send: vi.fn() }));
+const sdk = vi.hoisted(() => ({ send: vi.fn(), get: vi.fn() }));
 vi.mock("resend", () => ({ Resend: class {
-  emails = { send: sdk.send };
+  emails = { send: sdk.send, get: sdk.get };
 } }));
 const fakeFetch = vi.fn(() => { throw new Error("External network forbidden in tests"); });
 const message = {
@@ -19,6 +19,34 @@ beforeEach(() => {
 });
 afterEach(() => { expect(fakeFetch).not.toHaveBeenCalled(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 describe("adapter de e-mail — SDK Resend sempre mockado", () => {
+  const providerId = "33333333-3333-4333-8333-333333333333";
+  const previousEmail = { id: providerId, message_id: "<previous@resend.dev>", subject: message.subject, from: "JusFacil <sender@example.com>", to: [message.to] };
+  it("consulta o Message-ID RFC real pelo UUID do Resend, sem enviar", async () => {
+    sdk.get.mockResolvedValue({ data: previousEmail, error: null });
+    expect(await getSentEmailMessageId(providerId, message.subject)).toBe("<previous@resend.dev>");
+    expect(sdk.get).toHaveBeenCalledWith(providerId); expect(sdk.send).not.toHaveBeenCalled();
+  });
+  it("mapeia In-Reply-To e References, preservando idempotência", async () => {
+    await sendEmail({ ...message, subject: `Re: ${message.subject}`, thread: { inReplyTo: "<v2@resend.dev>", references: ["<v1@resend.dev>", "<v2@resend.dev>"] } });
+    expect(sdk.send.mock.calls[0][0].headers).toEqual({ "In-Reply-To": "<v2@resend.dev>", References: "<v1@resend.dev> <v2@resend.dev>" });
+    expect(sdk.send.mock.calls[0][1]).toEqual({ idempotencyKey: message.idempotencyKey });
+  });
+  it.each([{ message_id: providerId }, { message_id: "<v2@resend.dev>\r\nBcc: attacker@example.com" }, { to: ["other@example.com"] }, { subject: "Other case" }, { from: "other@example.com" }, { id: "44444444-4444-4444-8444-444444444444" }])("não aceita referência inconsistente ou injetada %j", async (changes) => {
+    sdk.get.mockResolvedValue({ data: { ...previousEmail, ...changes }, error: null });
+    await expect(getSentEmailMessageId(providerId, message.subject)).rejects.toMatchObject({ code: "EMAIL_THREAD_UNAVAILABLE", deliveryUncertain: false }); expect(sdk.send).not.toHaveBeenCalled();
+  });
+  it("chave sem permissão de leitura bloqueia resposta sem fallback", async () => {
+    sdk.get.mockResolvedValue({ data: null, error: { statusCode: 403, message: "private upstream" } });
+    await expect(getSentEmailMessageId(providerId, message.subject)).rejects.toMatchObject({ code: "EMAIL_THREAD_UNAVAILABLE" }); expect(sdk.send).not.toHaveBeenCalled();
+  });
+  it("consulta também exige modo teste e credenciais server-side", async () => {
+    vi.stubEnv("RESEND_API_KEY", ""); await expect(getSentEmailMessageId(providerId, message.subject)).rejects.toMatchObject({ code: "EMAIL_NOT_CONFIGURED" }); expect(sdk.get).not.toHaveBeenCalled();
+    vi.stubEnv("FORUM_SUBMISSION_MODE", "production"); await expect(getSentEmailMessageId(providerId, message.subject)).rejects.toMatchObject({ code: "SUBMISSION_MODE_DISABLED" });
+  });
+  it("bloqueia headers arbitrários ou cadeia que não termina no parent", async () => {
+    for (const thread of [{ inReplyTo: "uuid", references: ["uuid"] }, { inReplyTo: "<v2@resend.dev>", references: ["<v1@resend.dev>"] }]) await expect(sendEmail({ ...message, thread })).rejects.toMatchObject({ code: "EMAIL_MESSAGE_INVALID" });
+    expect(sdk.send).not.toHaveBeenCalled();
+  });
   it("mapeia remetente server-side, TO, CC, PDF e chave do provedor", async () => {
     expect(await sendEmail(message)).toEqual({ providerMessageId: "provider-qa-id" });
     expect(sdk.send).toHaveBeenCalledWith({ from: "JusFacil <sender@example.com>", to: [message.to], cc: [message.cc], subject: message.subject, text: message.text, html: message.html, attachments: [{ filename: message.attachments[0].filename, content: message.attachments[0].content, contentType: "application/pdf" }] }, { idempotencyKey: message.idempotencyKey });
