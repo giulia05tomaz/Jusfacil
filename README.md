@@ -8,6 +8,10 @@ Plataforma web de auxílio à organização de demandas cíveis, evidências e m
 
 > **Aviso jurídico:** o JusFácil é um projeto educacional e de portfólio. Ele não substitui advogado, Defensoria Pública, órgão público ou decisão judicial; não protocola ações, não garante resultados e não deve ser tratado como sistema pronto para produção.
 
+## Navegação
+
+[Visão geral](#sobre-o-projeto) · [Interface](#interface) · [Stack](#tecnologias) · [Instalação](#instalação-local) · [API](#api-do-projeto) · [Qualidade](#qualidade-e-validação-local) · [Limitações](#limitações-conhecidas)
+
 ## Sobre o projeto
 
 O JusFácil é uma plataforma LegalTech em desenvolvimento para auxiliar pessoas na organização inicial de determinadas demandas jurídicas. O fluxo inclui:
@@ -49,7 +53,7 @@ Navegador
 | Minutas e versionamento | Validado | Geração V1, revisão V2, histórico, aprovação e PDF validados ponta a ponta |
 | Portal do advogado | Em desenvolvimento | Aprovação e atribuição explícita previstas no fluxo |
 | Administração | Em desenvolvimento | Área protegida existente, ainda sem validação funcional final |
-| Testes automatizados | 49 aprovados | 7 arquivos de unidade, API, componentes, schemas e regras de domínio; Rules não executadas nesta rodada por Java 8 |
+| Testes automatizados | Implementados | Suíte em `src/tests/`; testes de Rules executados separadamente com emuladores |
 | Deploy público | Planejado | Este repositório ainda não representa uma versão de produção |
 
 ## Progresso
@@ -77,6 +81,8 @@ Navegador
 - [ ] Testes E2E e testes de Rules com Firebase Emulator
 - [ ] Revisões jurídica e LGPD
 - [ ] Deploy público
+
+<a id="interface"></a>
 
 ## 📸 Interface
 
@@ -109,6 +115,7 @@ Todas as telas autenticadas abaixo usam uma conta e um caso completamente fictí
 - OpenAI API com Structured Outputs
 - Zod para validação de dados estruturados
 - Vitest, Testing Library e Firebase Rules Unit Testing
+- Python para montagem e renderização local de documentos PDF/Word (`requirements-docx.txt`)
 - jsPDF, Mammoth, ExcelJS e PDF Parse para documentos e evidências
 
 ## Modelo de dados
@@ -250,6 +257,37 @@ Sem credenciais válidas, o sistema deve apresentar erro explícito. Não existe
 | `npm run test:rules` | Regras do Firestore e Storage em emuladores |
 | `npm run build` | Build otimizado |
 | `npm start` | Execução do build |
+
+## API do projeto
+
+Os Route Handlers do Next.js executam autenticação Firebase e autorização no servidor. As rotas usam o usuário autenticado e verificam o acesso ao caso; não são endpoints públicos de geração livre.
+
+| Método | Rota | Responsabilidade |
+| --- | --- | --- |
+| `POST` | `/api/chat/jurisbot` | Triagem conversacional e persistência do contexto |
+| `POST` | `/api/evidences/process` | Validação e análise de evidências |
+| `POST` | `/api/cases/{caseId}/draft` | Geração ou revisão de minuta |
+| `POST` | `/api/cases/{caseId}/drafts/{version}/approve` | Aprovação de uma versão |
+| `POST / GET` | `/api/cases/{caseId}/drafts/{version}/artifact` | Montagem e recuperação do documento completo |
+| `POST` | `/api/cases/{caseId}/request-review` | Solicitação de revisão humana |
+
+Contratos e implementação: [schemas de IA](src/lib/ai/schemas.ts), [autorização por caso](src/lib/security/caseAuthorization.ts) e [rotas](src/app/api/).
+
+## Qualidade e validação local
+
+Após instalar as dependências, as verificações locais são:
+
+```sh
+npm run lint
+npm run typecheck
+npm test
+```
+
+Os testes de regras usam emuladores e requerem Java 21 ou superior: `npm run test:rules`. O repositório não contém um workflow de GitHub Actions; a existência dos scripts não equivale a CI configurado.
+
+Para a montagem local de documentos, instale as dependências Python com `python -m pip install -r requirements-docx.txt` e configure `JUSFACIL_PYTHON_BIN` para o interpretador escolhido quando necessário. Essa dependência é separada da compilação do frontend.
+
+Esses comandos documentam o fluxo disponível; esta atualização de README não executa chamadas OpenAI, envio de e-mail ou validações em serviços externos.
 
 ## Segurança
 
